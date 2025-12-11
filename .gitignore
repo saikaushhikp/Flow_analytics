@@ -9,3 +9,11 @@ wheels/
 # Virtual environments
 .venv
 *env*
+
+*Data*
+*data*
+*key*
+*secrets*
+*V1*
+base.ipynb
+.gitignore
