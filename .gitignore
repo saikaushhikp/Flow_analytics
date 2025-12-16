@@ -13,9 +13,12 @@ wheels/
 
 *Data*
 *data*
-*key*
-*secrets*
 *V1*
-base.ipynb
+*doc*
+base/
 .gitignore
 progress/
+
+*pem
+*key*
+*secrets*
