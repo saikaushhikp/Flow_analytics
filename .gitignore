@@ -14,10 +14,7 @@ wheels/
 *Data*
 *data*
 *V1*
-*doc*
 base/
-.gitignore
-progress/
 
 *pem
 *key*

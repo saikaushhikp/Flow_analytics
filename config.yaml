@@ -1,0 +1,49 @@
+# SSM (Surrogate Safety Measures) Configuration
+
+# Vehicle type label mappings
+vehicle_labels:
+  pedestrian: 1
+  bicycle: 2
+  motorcycle: 3
+  car: 4
+  escooter: 5
+  van: 6
+  truck: 7
+  bus: 8
+
+# Pair extraction filters for vehicle-vehicle conflicts
+filters:
+  light_vehicles: [1, 2, 3, 5]  # Pedestrian, bicycle, motorcycle, e-scooter
+  vehicle_labels: [4, 6, 7, 8]  # Car, van, truck, bus
+  min_vehicle_speed: 2.0        # m/s, filters stationary/parking vehicles
+  max_ttc: 4.0                  # seconds, captures moderate to critical near-misses
+  min_closing_speed: 2.0        # m/s, filters slow-closing interactions
+  min_speed_diff: 0.5           # m/s, follower must be faster than leader
+
+# M-DRAC (Modified Deceleration Rate to Avoid Crash) parameters
+mdrac:
+  # Perception-Reaction Time by vehicle type (seconds)
+  prt:
+    1: 1.0   # Pedestrian
+    2: 1.0   # Bicycle
+    3: 0.92  # Motorcycle
+    4: 0.92  # Car
+    5: 1.0   # E-scooter
+    6: 1.5   # Van
+    7: 2.0   # Truck
+    8: 2.0   # Bus
+  
+  # Minimum M-DRAC threshold to classify as near-miss (m/s²)
+  min_mdrac: 3.4
+  
+  # Severity classification thresholds (m/s²)
+  severity:
+    severe: 7.0      # Emergency braking
+    moderate: 5.0    # Hard braking
+    normal: 3.4      # Noticeable braking (below this = not a near-miss)
+
+# Processing parameters
+processing:
+  chunk_size: 500000
+  dtype_optimization: true
+  verbose: true
