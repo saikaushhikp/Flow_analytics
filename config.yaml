@@ -11,11 +11,15 @@ vehicle_labels:
   truck: 7
   bus: 8
 
+light_vehicles: [1, 2, 3, 5]  # Pedestrian, bicycle, motorcycle, e-scooter
+heavy_vehicles: [4, 6, 7, 8]  # Car, van, truck, bus
+
 # Pair extraction filters for vehicle-vehicle conflicts
 filters:
-  light_vehicles: [1, 2, 3, 5]  # Pedestrian, bicycle, motorcycle, e-scooter
-  vehicle_labels: [4, 6, 7, 8]  # Car, van, truck, bus
-  min_vehicle_speed: 2.0        # m/s, filters stationary/parking vehicles
+  vehicle_labels: [4, 6, 7, 8]
+  min_vehicle_speed: 1.5        # m/s, filters stationary/parking vehicles
+  max_distance: 15.0            # m, maximum distance between vehicles to consider
+  max_lateral_distance: 2.5     # m, maximum perpendicular distance (same lane check)
   max_ttc: 4.0                  # seconds, captures moderate to critical near-misses
   min_closing_speed: 2.0        # m/s, filters slow-closing interactions
   min_speed_diff: 0.5           # m/s, follower must be faster than leader

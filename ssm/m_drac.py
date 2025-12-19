@@ -111,7 +111,13 @@ class ModifiedDRAC:
         Calculate M-DRAC for pairs with identified leader/follower.
         
         Uses follower's PRT for calculation.
-        Formula: MDRAC = speed_diff / (2 * (TTC - PRT))
+        
+        Formula (corrected for 2D):
+            MDRAC = closing_speed / [2 × (TTC - PRT)]
+        
+        Note: We use closing_speed (projected approach velocity) instead of
+        simple speed difference because it accounts for 2D motion.
+        
         If TTC <= PRT: MDRAC = inf (critical)
         
         Args:
@@ -133,10 +139,11 @@ class ModifiedDRAC:
         # Calculate time available for reaction
         time_available = pairs['ttc'].values - prt_values
         
-        # M-DRAC formula
+        # M-DRAC formula using closing_speed (correct for 2D)
+        # MDRAC = closing_speed / [2 × (TTC - PRT)]
         mdrac = np.where(
             time_available > 0,
-            pairs['speed_diff'].values / (2 * time_available),
+            pairs['closing_speed'].values / (2 * time_available),
             np.inf  # Critical: TTC <= PRT, no reaction time
         )
         
