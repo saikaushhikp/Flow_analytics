@@ -1,77 +1,54 @@
 """
-Utility functions for SSM (Surrogate Safety Measures) analysis.
-
-Provides TTC-based pair extraction for vehicle-vehicle conflict detection.
-Optimized with vectorized operations for performance.
+Pair extraction utilities for SSM conflict detection.
+Provides modular filters and method-specific pipelines.
 """
 
 import numpy as np
 import pandas as pd
-from typing import Tuple, Optional
+from typing import Tuple
 import yaml
 import gc
 
 
-def load_config(config_path: str = 'config.yaml') -> dict:
-    """
-    Load configuration from YAML file.
-    
-    Args:
-        config_path: Path to config.yaml file
-        
-    Returns:
-        Configuration dictionary
-    """
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    return config
+# Global configuration path
+CONFIG_PATH = 'config.yaml'
 
 
-def calculate_ttc_vectorized(
+def load_config(path: str = CONFIG_PATH) -> dict:
+    """Load configuration from YAML."""
+    with open(path, 'r') as f:
+        return yaml.safe_load(f)
+
+
+def calculate_ttc(
     pos1_x: np.ndarray, pos1_y: np.ndarray,
     pos2_x: np.ndarray, pos2_y: np.ndarray,
     vel1_x: np.ndarray, vel1_y: np.ndarray,
     vel2_x: np.ndarray, vel2_y: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Calculate Time-to-Collision (TTC) for vehicle pairs (vectorized).
-    
-    Uses projected closing speed: v_closing = -(Δv⃗ · Δr⃗) / d
-    TTC = d / v_closing (only if v_closing > 0)
-    
-    Args:
-        pos1_x, pos1_y: Position of vehicle 1 (meters)
-        pos2_x, pos2_y: Position of vehicle 2 (meters)
-        vel1_x, vel1_y: Velocity of vehicle 1 (m/s)
-        vel2_x, vel2_y: Velocity of vehicle 2 (m/s)
-        
-    Returns:
-        (ttc, distance, closing_speed) where ttc is in seconds, distance in meters,
-        and closing_speed in m/s (positive if closing, negative if diverging)
+    TTC = d / v_closing where v_closing = -(Δv · Δr) / d
+    Returns (ttc, distance, closing_speed)
     """
-    # Position difference vector (from veh1 to veh2)
+    # Position difference vector
     dx = pos2_x - pos1_x
     dy = pos2_y - pos1_y
     distance = np.sqrt(dx**2 + dy**2)
     
-    # Rate of change of gap vector: d/dt(p2 - p1) = v2 - v1
-    dvx = vel2_x - vel1_x  # v2 - v1 (NOT v1 - v2!)
+    # Velocity difference vector
+    dvx = vel2_x - vel1_x
     dvy = vel2_y - vel1_y
     
-    # Closing speed = rate of change of distance (negative = closing)
-    # d/dt(|d|) = d · d'/|d| = d · (v2-v1) / |d|
-    # If this is negative, distance is decreasing (closing)
-    # We define closing_speed as POSITIVE when closing
+    # Closing speed: negative dot product / distance
+    # Positive when vehicles are approaching
     dot_product = dvx * dx + dvy * dy
-    
-    # Avoid division by zero
     closing_speed = np.where(
-        distance > 0.1,
-        -dot_product / distance,  # Negative of rate = positive when closing
+        distance > 0.01,
+        -dot_product / distance,
         0.0
     )
     
-    # TTC calculation: only meaningful when closing (closing_speed > 0)
+    # TTC: only meaningful when closing_speed > 0
     ttc = np.where(
         closing_speed > 0.01,
         distance / closing_speed,
@@ -81,221 +58,208 @@ def calculate_ttc_vectorized(
     return ttc, distance, closing_speed
 
 
-def find_vehicle_vehicle_pairs(
-    df: pd.DataFrame,
-    config: Optional[dict] = None,
-    config_path: str = 'config.yaml'
-) -> pd.DataFrame:
+def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     """
-    Extract vehicle-vehicle pairs with potential conflicts using vectorized operations.
-    
-    OPTIMIZED VERSION with early distance filtering (timestamp-by-timestamp).
-    
-    Filter Pipeline:
-    1. Pre-filter: Keep only vehicle labels (removes pedestrians, bicycles, etc.)
-    2. Speed filter: v ≥ min_vehicle_speed
-    3. Distance-filtered pair generation: Process each timestamp separately
-       - Create pairs for timestamp
-       - Remove self-pairs (id1 < id2)
-       - Apply distance filter IMMEDIATELY (max_distance)
-       - Accumulate only nearby pairs
-    4. Approaching filter: Δv⃗·Δr⃗ < 0 (gap is closing)
-    5. Lateral distance filter: Same-lane check (max_lateral_distance)
-    6. Leader/Follower identification: Based on approach velocity
-    7. Speed difference filter: follower_vel > leader_vel + min_speed_diff
-    8. TTC calculation and filter: TTC ≤ max_ttc
-    9. Closing speed filter: v_closing ≥ min_closing_speed
-    
-    Performance Note:
-    Previous version created ALL pairs first (O(N²)), then filtered.
-    New version filters by distance DURING pair creation, avoiding
-    creation of millions of pairs that would be discarded.
-    Expected speedup: 10-50x depending on density.
-    
-    Args:
-        df: DataFrame with columns: id, label, timestamp, pos_x, pos_y, vel_x, vel_y, vel
-        config: Configuration dictionary (optional)
-        config_path: Path to config.yaml if config not provided
-        
-    Returns:
-        DataFrame with vehicle pairs including ttc, distance, closing_speed, and
-        leader/follower information
+    Base pair generation with minimal filters.
+    Filters: vehicle labels, min speed, max distance.
+    Processes timestamps in batches for efficiency.
     """
-    if config is None:
-        config = load_config(config_path)
-    
     filter_config = config['filters']
     vehicle_labels = filter_config['vehicle_labels']
     min_vehicle_speed = filter_config['min_vehicle_speed']
-    max_ttc = filter_config['max_ttc']
-    min_closing_speed = filter_config['min_closing_speed']
-    min_speed_diff = filter_config['min_speed_diff']
-    
-    # Empty result schema
-    empty_columns = [
-        'timestamp', 'id1', 'id2', 'label1', 'label2',
-        'pos1_x', 'pos1_y', 'pos2_x', 'pos2_y',
-        'vel1_x', 'vel1_y', 'vel2_x', 'vel2_y',
-        'vel1', 'vel2', 'distance', 'ttc', 'closing_speed',
-        'is_veh1_follower', 'follower_vel', 'leader_vel', 'speed_diff'
-    ]
-    
-    # =========================================================================
-    # Stage 1: Pre-filter to keep only specified vehicle labels
-    # =========================================================================
-    vehicles = df[df['label'].isin(vehicle_labels)].copy()
-    
-    if len(vehicles) == 0:
-        return pd.DataFrame(columns=empty_columns)
-    
-    # =========================================================================
-    # Stage 2: Filter moving vehicles (removes stationary/parked vehicles)
-    # =========================================================================
-    vehicles = vehicles[vehicles['vel'] >= min_vehicle_speed]
-    
-    if len(vehicles) == 0:
-        return pd.DataFrame(columns=empty_columns)
-    
-    print(f"  Vehicles after filtering: {len(vehicles):,} rows")
-    
-    # =========================================================================
-    # Stage 3: Distance-filtered pair generation (timestamp-by-timestamp)
-    # =========================================================================
-    # Process each timestamp separately to apply distance filter early
-    # This avoids creating millions of pairs that will be filtered anyway
-    
     max_distance = filter_config.get('max_distance', 15.0)
-    max_lateral_distance = filter_config.get('max_lateral_distance', 2.5)
+    chunk_size = config.get('chunk_size', 100)
     
-    print(f"  Generating pairs with distance filter (max_distance={max_distance}m)...")
+    # Stage 1: Pre-filter by vehicle type
+    vehicles = df[df['label'].isin(vehicle_labels)].copy()
+    if len(vehicles) == 0:
+        return pd.DataFrame()
     
+    # Stage 2: Remove stationary vehicles
+    vehicles = vehicles[vehicles['vel'] >= min_vehicle_speed]
+    if len(vehicles) == 0:
+        return pd.DataFrame()
+    
+    print(f"  Filtered vehicles: {len(vehicles):,}")
+    print(f"  Generating pairs (max_distance={max_distance}m)...")
+    
+    # Stage 3: Process timestamps in batches
+    # Batching reduces memory pressure by processing chunks of time
     all_pairs = []
     unique_timestamps = vehicles['timestamp'].unique()
+    n_timestamps = len(unique_timestamps)
     
-    for ts in unique_timestamps:
-        ts_vehicles = vehicles[vehicles['timestamp'] == ts].copy()
+    for chunk_start in range(0, n_timestamps, chunk_size):
+        chunk_end = min(chunk_start + chunk_size, n_timestamps)
+        chunk_ts = unique_timestamps[chunk_start:chunk_end]
+        chunk_vehicles = vehicles[vehicles['timestamp'].isin(chunk_ts)]
         
-        if len(ts_vehicles) < 2:
-            continue
-        
-        # Create pairs only for this timestamp
-        ts_slim = ts_vehicles[['timestamp', 'id', 'label', 'pos_x', 'pos_y', 
-                               'vel_x', 'vel_y', 'vel']].copy()
-        
-        ts_pairs = pd.merge(
-            ts_slim, 
-            ts_slim, 
-            on='timestamp', 
-            suffixes=('1', '2')
-        )
-        
-        # Remove self-pairs and duplicates (id1 < id2)
-        ts_pairs = ts_pairs[ts_pairs['id1'] < ts_pairs['id2']]
-        
-        if len(ts_pairs) == 0:
-            continue
-        
-        # Apply distance filter IMMEDIATELY (before accumulating)
-        dx = ts_pairs['pos_x2'].values - ts_pairs['pos_x1'].values
-        dy = ts_pairs['pos_y2'].values - ts_pairs['pos_y1'].values
-        dist_sq = dx**2 + dy**2
-        
-        distance_mask = dist_sq <= (max_distance ** 2)
-        ts_pairs = ts_pairs[distance_mask]
-        
-        if len(ts_pairs) > 0:
-            all_pairs.append(ts_pairs)
-        
-        # Cleanup this timestamp's data
-        del ts_vehicles, ts_slim, ts_pairs
+        # Process each timestamp in the chunk
+        for ts in chunk_ts:
+            ts_vehicles = chunk_vehicles[chunk_vehicles['timestamp'] == ts]
+            if len(ts_vehicles) < 2:
+                continue
+            
+            # Cartesian product: all combinations for this timestamp
+            ts_slim = ts_vehicles[['timestamp', 'id', 'label', 'pos_x', 'pos_y', 
+                                   'vel_x', 'vel_y', 'vel', 'yaw']].copy()
+            
+            ts_pairs = pd.merge(ts_slim, ts_slim, on='timestamp', suffixes=('1', '2'))
+            
+            # Remove self-pairs and duplicates (keep only id1 < id2)
+            ts_pairs = ts_pairs[ts_pairs['id1'] < ts_pairs['id2']]
+            
+            if len(ts_pairs) == 0:
+                continue
+            
+            # Early distance filter: reject distant pairs immediately
+            # This is critical for performance - avoids creating millions of pairs
+            dx = ts_pairs['pos_x2'].values - ts_pairs['pos_x1'].values
+            dy = ts_pairs['pos_y2'].values - ts_pairs['pos_y1'].values
+            dist_sq = dx**2 + dy**2
+            
+            ts_pairs = ts_pairs[dist_sq <= (max_distance ** 2)]
+            
+            if len(ts_pairs) > 0:
+                all_pairs.append(ts_pairs)
     
-    # Combine all timestamp pairs
+    # Combine all chunks
     if len(all_pairs) == 0:
-        return pd.DataFrame(columns=empty_columns)
+        return pd.DataFrame()
     
     pairs = pd.concat(all_pairs, ignore_index=True)
     del all_pairs
     gc.collect()
     
-    print(f"  Total pairs within {max_distance}m: {len(pairs):,}")
-    
-    # =========================================================================
-    # Stage 5: Approaching filter
-    # =========================================================================
-    # Rate of change of gap = d/dt(p2 - p1) = v2 - v1
-    # If (v2 - v1) · (p2 - p1) < 0, the gap is shrinking (approaching)
-    dx = pairs['pos_x2'].values - pairs['pos_x1'].values
-    dy = pairs['pos_y2'].values - pairs['pos_y1'].values
-    dvx = pairs['vel_x2'].values - pairs['vel_x1'].values  # v2 - v1 (NOT v1 - v2!)
-    dvy = pairs['vel_y2'].values - pairs['vel_y1'].values
-    
-    # Negative dot product means gap is shrinking (vehicles approaching)
-    dot_product = dvx * dx + dvy * dy
-    approaching_mask = dot_product < 0
-    
-    pairs = pairs[approaching_mask]
-    
-    if len(pairs) == 0:
-        return pd.DataFrame(columns=empty_columns)
-    
-    print(f"  Approaching pairs: {len(pairs):,}")
-    
-    # Recompute for filtered data
+    # Add distance column (needed for later filters)
     dx = pairs['pos_x2'].values - pairs['pos_x1'].values
     dy = pairs['pos_y2'].values - pairs['pos_y1'].values
     distance = np.sqrt(dx**2 + dy**2)
     
-    # =========================================================================
-    # Stage 5.5: Lateral distance filter (same-lane check)
-    # =========================================================================
-    # Uses the follower's velocity direction as "lane direction"
-    # Lateral distance = perpendicular distance between vehicles
-    # Formula: lat_dist = |dx × u_y - dy × u_x| where u is lane unit vector
-    #
-    # We need to identify follower first to get their velocity direction
-    # For now, use the faster vehicle's velocity as lane direction
+    pairs['distance'] = distance
+    
+    print(f"  Nearby pairs: {len(pairs):,}")
+    return pairs
+
+
+def filter_approaching(pairs: pd.DataFrame) -> pd.DataFrame:
+    """
+    Keep pairs where gap is closing: (v2 - v1) · (p2 - p1) < 0
+    Adds: closing_speed, ttc
+    """
+    if len(pairs) == 0:
+        return pairs
+    
+    # Calculate position and velocity differences
+    dx = pairs['pos_x2'].values - pairs['pos_x1'].values
+    dy = pairs['pos_y2'].values - pairs['pos_y1'].values
+    dvx = pairs['vel_x2'].values - pairs['vel_x1'].values
+    dvy = pairs['vel_y2'].values - pairs['vel_y1'].values
+    
+    # Dot product: negative means gap is closing
+    dot_product = dvx * dx + dvy * dy
+    pairs = pairs[dot_product < 0].copy()
+    
+    if len(pairs) == 0:
+        return pairs
+    
+    # Calculate TTC and closing speed for approaching pairs
+    ttc, _, closing_speed = calculate_ttc(
+        pairs['pos_x1'].values, pairs['pos_y1'].values,
+        pairs['pos_x2'].values, pairs['pos_y2'].values,
+        pairs['vel_x1'].values, pairs['vel_y1'].values,
+        pairs['vel_x2'].values, pairs['vel_y2'].values
+    )
+    
+    pairs['ttc'] = ttc
+    pairs['closing_speed'] = closing_speed
+    
+    print(f"  Approaching pairs: {len(pairs):,}")
+    return pairs
+
+
+def filter_same_lane(pairs: pd.DataFrame, max_lateral: float) -> pd.DataFrame:
+    """
+    Lateral distance check: lat_dist = |Δr × û| where û = v_faster/|v_faster|
+    Keeps pairs with lateral_dist <= max_lateral
+    """
+    if len(pairs) == 0:
+        return pairs
+    
+    # Position difference
+    dx = pairs['pos_x2'].values - pairs['pos_x1'].values
+    dy = pairs['pos_y2'].values - pairs['pos_y1'].values
+    
+    # Determine faster vehicle (likely the follower)
     speed1 = pairs['vel1'].values
     speed2 = pairs['vel2'].values
     faster_is_1 = speed1 > speed2
     
-    # Get velocity of faster vehicle (likely follower)
+    # Use faster vehicle's velocity as lane direction
     vel_x = np.where(faster_is_1, pairs['vel_x1'].values, pairs['vel_x2'].values)
     vel_y = np.where(faster_is_1, pairs['vel_y1'].values, pairs['vel_y2'].values)
     speed = np.where(faster_is_1, speed1, speed2)
     
-    # Filter: need minimum speed to define lane direction (avoid div by zero)
+    # Normalize to unit vector (avoid division by zero)
     moving_mask = speed > 0.5
-    
-    # Unit vector in lane direction
     u_x = np.where(moving_mask, vel_x / speed, 0.0)
     u_y = np.where(moving_mask, vel_y / speed, 0.0)
     
-    # Lateral distance using cross product: |d × u|
+    # Cross product gives lateral distance
     lat_dist = np.abs(dx * u_y - dy * u_x)
     
-    # Apply lateral filter (skip for stationary pairs)
-    lateral_mask = (lat_dist <= max_lateral_distance) | (~moving_mask)
+    # Keep pairs within lateral threshold (or stationary)
+    lateral_mask = (lat_dist <= max_lateral) | (~moving_mask)
     
-    pairs = pairs[lateral_mask]
-    distance = distance[lateral_mask]
-    
+    pairs = pairs[lateral_mask].copy()
+    print(f"  Same-lane pairs (lat <= {max_lateral}m): {len(pairs):,}")
+    return pairs
+
+
+def classify_conflict_type(pairs: pd.DataFrame) -> pd.DataFrame:
+    """
+    Classify based on relative heading: Δθ = |yaw2 - yaw1|
+    rear-end: Δθ < 30°, perpendicular: 60° < Δθ < 120°
+    head-on: Δθ > 150°, lane-change: else
+    """
     if len(pairs) == 0:
-        return pd.DataFrame(columns=empty_columns)
+        return pairs
     
-    print(f"  Pairs in same lane (lat_dist <= {max_lateral_distance}m): {len(pairs):,}")
+    # Calculate absolute heading difference
+    angle_diff = np.abs(pairs['yaw2'].values - pairs['yaw1'].values)
     
-    # Recompute dx/dy for filtered data
+    # Normalize to [0, π] range (shortest angular distance)
+    angle_diff = np.minimum(angle_diff, 2*np.pi - angle_diff)
+    angle_deg = np.degrees(angle_diff)
+    
+    # Classify based on heading difference
+    conflict_type = np.where(angle_deg < 30, 'rear-end',
+                    np.where(angle_deg > 150, 'head-on',
+                    np.where((angle_deg > 60) & (angle_deg < 120), 'perpendicular',
+                    'lane-change')))
+    
+    pairs = pairs.copy()
+    pairs['conflict_type'] = conflict_type
+    return pairs
+
+
+def identify_leader_follower(pairs: pd.DataFrame) -> pd.DataFrame:
+    """
+    Follower has higher approach velocity: v_approach = (v · Δr) / d
+    Adds: is_veh1_follower, follower_vel, leader_vel, speed_diff
+    """
+    if len(pairs) == 0:
+        return pairs
+    
+    # Position difference (from veh1 to veh2)
     dx = pairs['pos_x2'].values - pairs['pos_x1'].values
     dy = pairs['pos_y2'].values - pairs['pos_y1'].values
+    distance = pairs['distance'].values
     
-    # =========================================================================
-    # Stage 6: Identify leader and follower
-    # =========================================================================
-    # The vehicle moving faster TOWARD the other is the follower
-    # d = p2 - p1 points from veh1 to veh2
-    # v1 · d > 0 means v1 has component in direction of d (toward veh2)
-    # v2 · d < 0 (i.e., -v2 · d > 0) means v2 has component toward veh1
+    # Calculate approach velocities
+    # v1 pointing toward v2: positive component
     v1_toward_v2 = (pairs['vel_x1'].values * dx + pairs['vel_y1'].values * dy) / distance
+    # v2 pointing toward v1: negative dot product, so negate
     v2_toward_v1 = -(pairs['vel_x2'].values * dx + pairs['vel_y2'].values * dy) / distance
     
     # Follower has higher approach velocity
@@ -305,96 +269,98 @@ def find_vehicle_vehicle_pairs(
     vel1_mag = pairs['vel1'].values
     vel2_mag = pairs['vel2'].values
     
-    # Assign follower and leader velocities
+    # Assign follower/leader roles
     follower_vel = np.where(veh1_is_follower, vel1_mag, vel2_mag)
     leader_vel = np.where(veh1_is_follower, vel2_mag, vel1_mag)
-    
-    # =========================================================================
-    # Stage 7: Speed difference filter (follower must be faster than leader)
-    # =========================================================================
     speed_diff = follower_vel - leader_vel
-    speed_diff_mask = speed_diff > min_speed_diff
     
-    pairs = pairs[speed_diff_mask]
-    distance = distance[speed_diff_mask]
-    veh1_is_follower = veh1_is_follower[speed_diff_mask]
-    follower_vel = follower_vel[speed_diff_mask]
-    leader_vel = leader_vel[speed_diff_mask]
-    speed_diff = speed_diff[speed_diff_mask]
+    # Add columns
+    pairs = pairs.copy()
+    pairs['is_veh1_follower'] = veh1_is_follower
+    pairs['follower_vel'] = follower_vel
+    pairs['leader_vel'] = leader_vel
+    pairs['speed_diff'] = speed_diff
     
+    return pairs
+
+
+def get_mdrac_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """
+    Method-specific pipeline for MDRAC (Modified DRAC) analysis.
+    
+    MDRAC is designed for longitudinal car-following scenarios where:
+    - Vehicles are in the same lane
+    - Follower is approaching leader from behind
+    - Follower is traveling faster than leader
+    
+    Filter sequence:
+        1. Base pairs (distance filter)
+        2. Approaching only (gap must be closing)
+        3. Same lane (lateral distance check)
+        4. Leader/follower identification
+        5. Speed difference filter (follower must be faster)
+        6. TTC and closing speed thresholds
+    
+    Args:
+        df: Vehicle data DataFrame
+        config: Configuration with MDRAC-specific thresholds
+        
+    Returns:
+        DataFrame ready for MDRAC calculation
+    """
+    # Stage 1: Generate base pairs
+    pairs = find_all_nearby_pairs(df, config)
     if len(pairs) == 0:
-        return pd.DataFrame(columns=empty_columns)
+        return pairs
     
-    print(f"  Pairs with speed_diff > {min_speed_diff}: {len(pairs):,}")
-    
-    # =========================================================================
-    # Stage 8: Calculate TTC
-    # =========================================================================
-    ttc, _, closing_speed = calculate_ttc_vectorized(
-        pairs['pos_x1'].values, pairs['pos_y1'].values,
-        pairs['pos_x2'].values, pairs['pos_y2'].values,
-        pairs['vel_x1'].values, pairs['vel_y1'].values,
-        pairs['vel_x2'].values, pairs['vel_y2'].values
-    )
-    
-    # =========================================================================
-    # Stage 9: Filter by TTC and closing speed
-    # =========================================================================
-    ttc_mask = ttc <= max_ttc
-    closing_speed_mask = closing_speed >= min_closing_speed
-    final_mask = ttc_mask & closing_speed_mask
-    
-    pairs = pairs[final_mask]
-    ttc = ttc[final_mask]
-    distance = distance[final_mask]
-    closing_speed = closing_speed[final_mask]
-    veh1_is_follower = veh1_is_follower[final_mask]
-    follower_vel = follower_vel[final_mask]
-    leader_vel = leader_vel[final_mask]
-    speed_diff = speed_diff[final_mask]
-    
+    # Stage 2: Keep only approaching pairs
+    pairs = filter_approaching(pairs)
     if len(pairs) == 0:
-        return pd.DataFrame(columns=empty_columns)
+        return pairs
     
-    print(f"  Final pairs (TTC ≤ {max_ttc}s, closing ≥ {min_closing_speed}m/s): {len(pairs):,}")
+    # Stage 3: Same-lane filter (critical for car-following)
+    pairs = filter_same_lane(pairs, config['filters']['max_lateral_distance'])
+    if len(pairs) == 0:
+        return pairs
     
-    # =========================================================================
-    # Build result DataFrame
-    # =========================================================================
-    result = pd.DataFrame({
-        'timestamp': pairs['timestamp'].values,
-        'id1': pairs['id1'].values,
-        'id2': pairs['id2'].values,
-        'label1': pairs['label1'].values,
-        'label2': pairs['label2'].values,
-        'pos1_x': pairs['pos_x1'].values,
-        'pos1_y': pairs['pos_y1'].values,
-        'pos2_x': pairs['pos_x2'].values,
-        'pos2_y': pairs['pos_y2'].values,
-        'vel1_x': pairs['vel_x1'].values,
-        'vel1_y': pairs['vel_y1'].values,
-        'vel2_x': pairs['vel_x2'].values,
-        'vel2_y': pairs['vel_y2'].values,
-        'vel1': pairs['vel1'].values,
-        'vel2': pairs['vel2'].values,
-        'distance': distance,
-        'ttc': ttc,
-        'closing_speed': closing_speed,
-        'is_veh1_follower': veh1_is_follower,
-        'follower_vel': follower_vel,
-        'leader_vel': leader_vel,
-        'speed_diff': speed_diff
-    })
+    # Stage 4: Identify leader and follower
+    pairs = identify_leader_follower(pairs)
     
-    # Cleanup
-    del pairs
-    gc.collect()
+    # Stage 5: Follower must be faster than leader
+    min_speed_diff = config['filters']['min_speed_diff']
+    pairs = pairs[pairs['speed_diff'] > min_speed_diff].copy()
+    print(f"  Speed diff > {min_speed_diff}: {len(pairs):,}")
     
-    return result
+    # Stage 6: TTC and closing speed filters
+    max_ttc = config['filters']['max_ttc']
+    min_closing = config['filters']['min_closing_speed']
+    pairs = pairs[(pairs['ttc'] <= max_ttc) & (pairs['closing_speed'] >= min_closing)].copy()
+    print(f"  Final MDRAC pairs: {len(pairs):,}")
+    
+    return pairs
+
+
+def get_spf_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """
+    SPF pipeline: all conflict types (no lane restriction).
+    Filters: approaching only
+    """
+    pairs = find_all_nearby_pairs(df, config)
+    if len(pairs) == 0:
+        return pairs
+    
+    # Stage 2: Keep only approaching pairs
+    pairs = filter_approaching(pairs)
+    
+    # Stage 3: Classify conflict geometry (for analysis)
+    pairs = classify_conflict_type(pairs)
+    
+    print(f"  Final SPF pairs: {len(pairs):,}")
+    return pairs
 
 
 def get_prt_for_labels(labels: np.ndarray, config: dict) -> np.ndarray:
-    """Get Perception-Reaction Time (PRT) values for vehicle labels."""
+    """Get Perception-Reaction Time values for vehicle labels."""
     prt_map = config['mdrac']['prt']
     return np.array([prt_map.get(int(label), 1.0) for label in labels])
 
@@ -405,10 +371,9 @@ def get_threshold_for_labels(labels: np.ndarray, config: dict) -> np.ndarray:
     return np.array([threshold_map.get(int(label), 3.4) for label in labels])
 
 
-# =============================================================================
+#-------------------------------------------------------------------------------
 # TESTING / VERIFICATION
-# =============================================================================
-
+#-------------------------------------------------------------------------------
 if __name__ == "__main__":
     """
     Comprehensive test suite for pair generation logic.
@@ -419,9 +384,7 @@ if __name__ == "__main__":
     print("COMPREHENSIVE PAIR GENERATION TEST SUITE")
     print("=" * 70)
     
-    # -------------------------------------------------------------------------
     # Test Configuration (permissive for testing)
-    # -------------------------------------------------------------------------
     test_config = {
         'filters': {
             'vehicle_labels': [4, 6, 7, 8],
@@ -601,8 +564,8 @@ if __name__ == "__main__":
             speed = np.sqrt(v['vel'][0]**2 + v['vel'][1]**2)
             print(f"  ID {v['id']}: pos={v['pos']}, vel={v['vel']}, speed={speed:.1f}m/s")
         
-        # Run pair generation
-        pairs = find_vehicle_vehicle_pairs(test_df, test_config)
+        # Run pair generation (using MDRAC pipeline)
+        pairs = get_mdrac_pairs(test_df, test_config)
         
         # Analyze results
         pair_found = len(pairs) > 0
@@ -667,4 +630,3 @@ if __name__ == "__main__":
         print("⚠️  SOME TESTS FAILED - Review above for details")
     
     print("=" * 70)
-

@@ -46,6 +46,31 @@ mdrac:
     moderate: 5.0    # Hard braking
     normal: 3.4      # Noticeable braking (below this = not a near-miss)
 
+# SPF (Safety Potential Field) parameters
+spf:
+  # Objective Field (O-field) - Physical collision probability
+  objective:
+    beta_p: 10        # Spatial shape factor (binary-like collision boundary)
+    beta_t: 2         # Temporal shape factor (quadratic time pressure)
+    t_star: 7.5       # Time horizon in seconds (look-ahead limit)
+  
+  # Subjective Field (S-field) - Driver discomfort
+  subjective:
+    gamma_y: 1.4310   # Lateral scale (constant) [meters]
+    beta_y: 4.9956    # Lateral shape (constant) [dimensionless]
+  
+  # Risk thresholds for both fields
+  thresholds:
+    warning: 0.37     # e^-1 threshold (high risk starts)
+    danger: 0.70      # High danger level
+    critical: 0.90    # Critical level
+  
+  # Minimum risk threshold to classify as near-miss
+  min_risk: 0.37
+  
+  # Composite risk combination method ('max', 'probabilistic', 'weighted')
+  composite_method: 'pro'
+
 # Processing parameters
 processing:
   chunk_size: 500000

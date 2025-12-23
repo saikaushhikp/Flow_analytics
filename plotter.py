@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from typing import Tuple, Optional
 import warnings
-
+from tqdm import tqdm
 warnings.filterwarnings('ignore')
 
 
@@ -40,6 +40,9 @@ def extract_trajectories(
     
     Returns:
         (traj1, traj2): DataFrames with trajectory data for each vehicle
+        
+    Raises:
+        ValueError: If no data found or no temporal overlap
     """
     # Extract trajectories
     traj1 = df[df['id'] == id1].sort_values('timestamp').copy()
@@ -48,19 +51,31 @@ def extract_trajectories(
     if len(traj1) == 0 or len(traj2) == 0:
         raise ValueError(f"No data found for vehicle pair ({id1}, {id2})")
     
+    # Check for temporal overlap
+    overlap_start = max(traj1['timestamp'].min(), traj2['timestamp'].min())
+    overlap_end = min(traj1['timestamp'].max(), traj2['timestamp'].max())
+    
+    if overlap_start > overlap_end:
+        # No overlap - provide detailed info
+        raise ValueError(
+            f"No temporal overlap between vehicles!\n"
+            f"  Vehicle {id1}: {traj1['timestamp'].min()} to {traj1['timestamp'].max()}\n"
+            f"  Vehicle {id2}: {traj2['timestamp'].min()} to {traj2['timestamp'].max()}\n"
+            f"  Gap: {(overlap_start - overlap_end).total_seconds():.2f} seconds"
+        )
+    
     # If time window specified, find overlap and extract window
     if time_window is not None:
-        # Find overlapping time range
-        start_time = max(traj1['timestamp'].min(), traj2['timestamp'].min())
-        end_time = min(traj1['timestamp'].max(), traj2['timestamp'].max())
-        
-        # Extract window around midpoint
-        mid_time = (start_time + end_time) / 2
+        # Extract window around midpoint of overlap
+        mid_time = (overlap_start + overlap_end) / 2
         window_start = mid_time - pd.Timedelta(seconds=time_window/2)
         window_end = mid_time + pd.Timedelta(seconds=time_window/2)
         
         traj1 = traj1[(traj1['timestamp'] >= window_start) & (traj1['timestamp'] <= window_end)]
         traj2 = traj2[(traj2['timestamp'] >= window_start) & (traj2['timestamp'] <= window_end)]
+    
+    print(f"  ✓ Temporal overlap: {overlap_start} to {overlap_end}")
+    print(f"    Duration: {(overlap_end - overlap_start).total_seconds():.2f} seconds")
     
     return traj1, traj2
 
@@ -173,26 +188,41 @@ def plot_trajectories(
     ax.scatter(traj2['pos_x'].iloc[-1], traj2['pos_y'].iloc[-1], 
                c=color2, s=150, marker='s', edgecolor='white', linewidth=2.5, zorder=5)
     
-    # Find minimum distance point
-    distances = np.sqrt((traj1['pos_x'].values - traj2['pos_x'].values[:len(traj1)])**2 + 
-                       (traj1['pos_y'].values - traj2['pos_y'].values[:len(traj1)])**2)
-    min_idx = np.argmin(distances)
+    # Find minimum distance point (FIXED: properly align trajectories by timestamp)
+    # Merge trajectories on timestamp to get synchronized positions
+    merged = pd.merge_asof(
+        traj1[['timestamp', 'pos_x', 'pos_y']].rename(columns={'pos_x': 'x1', 'pos_y': 'y1'}),
+        traj2[['timestamp', 'pos_x', 'pos_y']].rename(columns={'pos_x': 'x2', 'pos_y': 'y2'}),
+        on='timestamp',
+        direction='nearest',
+        tolerance=pd.Timedelta(seconds=0.5)
+    )
+    
+    # Calculate distances at synchronized timestamps
+    distances = np.sqrt((merged['x2'] - merged['x1'])**2 + (merged['y2'] - merged['y1'])**2)
+    min_idx = distances.idxmin()
     min_distance = distances[min_idx]
     
+    # Get positions at minimum distance
+    min_pos1_x = merged.loc[min_idx, 'x1']
+    min_pos1_y = merged.loc[min_idx, 'y1']
+    min_pos2_x = merged.loc[min_idx, 'x2']
+    min_pos2_y = merged.loc[min_idx, 'y2']
+    
     # Highlight minimum distance point with star
-    ax.scatter(traj1['pos_x'].iloc[min_idx], traj1['pos_y'].iloc[min_idx], 
+    ax.scatter(min_pos1_x, min_pos1_y, 
                c='#F39C12', s=300, marker='*', edgecolor='white', linewidth=2, zorder=10)
-    ax.scatter(traj2['pos_x'].iloc[min_idx], traj2['pos_y'].iloc[min_idx], 
+    ax.scatter(min_pos2_x, min_pos2_y, 
                c='#F39C12', s=300, marker='*', edgecolor='white', linewidth=2, zorder=10)
     
     # Draw line between vehicles at min distance
-    ax.plot([traj1['pos_x'].iloc[min_idx], traj2['pos_x'].iloc[min_idx]], 
-            [traj1['pos_y'].iloc[min_idx], traj2['pos_y'].iloc[min_idx]], 
+    ax.plot([min_pos1_x, min_pos2_x], 
+            [min_pos1_y, min_pos2_y], 
             color='#F39C12', linestyle='--', linewidth=2, alpha=0.7, zorder=4)
     
     # Add minimum distance annotation
-    mid_x = (traj1['pos_x'].iloc[min_idx] + traj2['pos_x'].iloc[min_idx]) / 2
-    mid_y = (traj1['pos_y'].iloc[min_idx] + traj2['pos_y'].iloc[min_idx]) / 2
+    mid_x = (min_pos1_x + min_pos2_x) / 2
+    mid_y = (min_pos1_y + min_pos2_y) / 2
     ax.text(mid_x, mid_y, f'{min_distance:.2f}m', 
             fontsize=11, fontweight='bold', color='#F39C12',
             bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='#F39C12', linewidth=2),
@@ -399,13 +429,25 @@ def plot_conflict_analysis(
     
     # Save if path provided
     if save_path:
-        fig1.savefig(f"{save_path}_trajectory.png", dpi=150, bbox_inches='tight')
-        fig2.savefig(f"{save_path}_distance.png", dpi=150, bbox_inches='tight')
-        fig3.savefig(f"{save_path}_closing_speed.png", dpi=150, bbox_inches='tight')
+        # Extract directory and create proper filenames
+        import os
+        save_dir = os.path.dirname(save_path) if os.path.dirname(save_path) else '.'
+        
+        # Create clean filenames: veh123_vs_veh456_trajectory.png
+        base_name = f"veh{id1}_vs_veh{id2}"
+        
+        trajectory_file = os.path.join(save_dir, f"{base_name}_trajectory.png")
+        distance_file = os.path.join(save_dir, f"{base_name}_distance.png")
+        closing_file = os.path.join(save_dir, f"{base_name}_closing_speed.png")
+        
+        fig1.savefig(trajectory_file, dpi=150, bbox_inches='tight')
+        fig2.savefig(distance_file, dpi=150, bbox_inches='tight')
+        fig3.savefig(closing_file, dpi=150, bbox_inches='tight')
+        
         print(f"✓ Saved plots to:")
-        print(f"  - {save_path}_trajectory.png")
-        print(f"  - {save_path}_distance.png")
-        print(f"  - {save_path}_closing_speed.png")
+        print(f"  - {trajectory_file}")
+        print(f"  - {distance_file}")
+        print(f"  - {closing_file}")
     
     # Show plots
     if show_plot:
@@ -417,7 +459,7 @@ def plot_conflict_analysis(
 
 
 # =============================================================================
-# EXAMPLE USAGE
+# Run to visualize a specific conflict pair
 # =============================================================================
 
 if __name__ == "__main__":
@@ -432,21 +474,72 @@ if __name__ == "__main__":
     # =========================================================================
     # CONFIGURE THESE VALUES
     # =========================================================================
-    DATA_PATH = 'C:/Users/suggu/IITM/AGC/flow-analytics/Data/2025-06-02-data/2nd_June_2025'  # Path to your preprocessed data
-    ID1 = 11332919  # First vehicle ID
-    ID2 = 11332806  # Second vehicle ID
+    DATA_DIR = '/home/ubuntu/data/uploads/objects/clean'  # Path to your preprocessed data
+    START_DATE = "2025-06-01"
+    END_DATE = "2025-06-01"
+    CHUNK_SIZE = 500000
+    # 10292540_10292655 - Apporach at a intersection, not a real near miss
+    # 10447042_10446808
+    ID1 = 10447042  # First vehicle ID
+    ID2 = 10446808  # Second vehicle ID
     # =========================================================================
-    
-    print(f"Loading data from {DATA_PATH}...")
-    
-    if not os.path.exists(DATA_PATH):
-        print(f"Error: {DATA_PATH} not found")
-        print("Please update DATA_PATH variable with correct path.")
-        exit(1)
-    
-    df = pd.read_parquet(DATA_PATH)
-    print(f"Loaded {len(df):,} rows")
-    
+    def load_data(data_dir, start_date, end_date):
+        """
+        Load data with optimized dtypes for memory efficiency
+        """
+        # Define optimal dtypes upfront - saves ~50% memory
+        dtypes = {
+            'id': 'int32',           # Was int64 → Save 50%
+            'label': 'int8',         # Values 1-8 → Save 87.5%
+            'pos_x': 'float32',      # Was float64 → Save 50%
+            'pos_y': 'float32',
+            'pos_z': 'float32',
+            'vel': 'float32',
+            'vel_x': 'float32',
+            'vel_y': 'float32',
+            'yaw': 'float32',
+            'size_x': 'float32',
+            'size_y': 'float32',
+            # timestamp stays int64 (needed for precision)
+        }
+        
+        # List to collect dataframes
+        dfs = []
+        
+        # Loop over all folders within date range
+        for folder in tqdm(sorted(os.listdir(data_dir)), desc="Loading data"):
+            folder_path = os.path.join(data_dir, folder)
+            
+            # Skip non-folders
+            if not os.path.isdir(folder_path):
+                continue
+            
+            if folder.startswith(start_date) or folder.startswith(end_date):
+                # Load all parquet files inside the folder
+                df_chunk = pd.read_parquet(folder_path)
+                
+                # Apply dtypes to matching columns
+                for col, dtype in dtypes.items():
+                    if col in df_chunk.columns:
+                        df_chunk[col] = df_chunk[col].astype(dtype)
+                
+                dfs.append(df_chunk)
+                del df_chunk  # Clean up immediately
+        
+        # Combine all into single dataframe
+        if dfs:
+            df = pd.concat(dfs, ignore_index=True)
+            
+            # Destroy the list immediately
+            del dfs
+            return df
+        else:
+            print("No data found for given date range.")
+            return pd.DataFrame()
+
+    # Usage
+    df = load_data(DATA_DIR, START_DATE, END_DATE)
+    print(f"Loaded {len(df)} records from {START_DATE} to {END_DATE}")    
     # Create output directory
     os.makedirs('results/viz', exist_ok=True)
     
@@ -458,7 +551,7 @@ if __name__ == "__main__":
             df, 
             id1=ID1, 
             id2=ID2,
-            save_path=f'results/viz/conflict_{ID1}_{ID2}.png',
+            save_path='results/viz',  # Just directory, function creates proper names
             show_plot=True
         )
         print(f"✓ Done!")
