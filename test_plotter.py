@@ -11,13 +11,10 @@ df = load_data(
 print(f"Loaded {len(df)} records")
 
 # Test with different ID pair
-print("\nTesting with ID pair: 10292540 and 10292655")
 plot_conflict_analysis(
     df,
-    id1=10292540,
-    id2=10292655,
+    id1=11017670,
+    id2=11017862,
     output_dir='results/plots',
     show_plot=False  # Don't show plots, just save
 )
-
-print("\n✓ Test completed successfully!")

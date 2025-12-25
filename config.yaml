@@ -69,10 +69,13 @@ spf:
   min_risk: 0.37
   
   # Composite risk combination method ('max', 'probabilistic', 'weighted')
-  composite_method: 'pro'
+  composite_method: 'probabilistic'
 
 # Processing parameters
 processing:
   chunk_size: 500000
   dtype_optimization: true
   verbose: true
+
+# Process multiple timestamps per batch for vectorized pair generation
+timestamp_batch_size: 20000

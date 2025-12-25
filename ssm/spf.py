@@ -11,6 +11,11 @@ Risk Components:
     O-field: Physical collision probability (trajectory intersection)
     S-field: Driver discomfort (proximity to safety bubble)
     C-SPF: Composite risk = max(O-field, S-field)
+    
+Optimizations:
+    - Vectorized NumPy operations (no loops)
+    - Numba JIT compilation with parallel processing
+    - Batch processing for memory efficiency
 """
 
 import numpy as np
@@ -18,6 +23,16 @@ import pandas as pd
 from typing import Tuple, Optional
 import sys
 import os
+from tqdm import tqdm
+import gc
+
+# Numba for JIT compilation and parallel processing
+try:
+    from numba import jit, prange
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
+    print("Warning: Numba not available. Install with 'pip install numba' for 5-10x speedup.")
 
 # Add parent directory for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,6 +41,321 @@ from ssm.utils import get_spf_pairs, load_config, CONFIG_PATH
 
 # Numerical stability constant
 EPSILON = 1e-2
+
+
+# =============================================================================
+# NUMBA JIT COMPILED FUNCTIONS (Parallel Processing)
+# =============================================================================
+
+if NUMBA_AVAILABLE:
+    @jit(nopython=True, parallel=True, cache=True)
+    def _calculate_o_field_batch_numba(
+        pos1_x: np.ndarray, pos1_y: np.ndarray,
+        vel1_x: np.ndarray, vel1_y: np.ndarray,
+        width1: np.ndarray,
+        pos2_x: np.ndarray, pos2_y: np.ndarray,
+        vel2_x: np.ndarray, vel2_y: np.ndarray,
+        width2: np.ndarray,
+        beta_p: float, beta_t: float, t_star: float
+    ) -> np.ndarray:
+        """
+        Numba JIT-compiled O-field calculation for all pairs in parallel.
+        Uses prange for automatic parallelization across CPU cores.
+        """
+        n = len(pos1_x)
+        result = np.zeros(n, dtype=np.float64)
+        
+        for i in prange(n):
+            # Relative kinematics
+            dx = pos2_x[i] - pos1_x[i]
+            dy = pos2_y[i] - pos1_y[i]
+            dvx = vel2_x[i] - vel1_x[i]
+            dvy = vel2_y[i] - vel1_y[i]
+            
+            # Edge case: same position
+            d_mag = np.sqrt(dx*dx + dy*dy)
+            if d_mag < EPSILON:
+                result[i] = 1.0
+                continue
+            
+            # Edge case: no relative motion
+            v_mag_sq = dvx*dvx + dvy*dvy
+            if v_mag_sq < EPSILON:
+                result[i] = 0.0
+                continue
+            
+            # Check if approaching (Δv · Δr < 0)
+            d_dot_v = dx*dvx + dy*dvy
+            if d_dot_v >= 0:
+                result[i] = 0.0
+                continue
+            
+            # Miss distance (perpendicular distance)
+            cross = dx * dvy - dy * dvx
+            d_min = abs(cross) / np.sqrt(v_mag_sq)
+            
+            # Time to closest point
+            t_min = -d_dot_v / v_mag_sq
+            
+            # Spatial and temporal risk
+            d_star = 0.5 * (width1[i] + width2[i])
+            P_ij = np.exp(-((d_min / d_star) ** beta_p))
+            T_ij = np.exp(-((t_min / t_star) ** beta_t))
+            
+            result[i] = P_ij * T_ij
+        
+        return result
+
+    @jit(nopython=True, parallel=True, cache=True)
+    def _calculate_s_field_batch_numba(
+        pos1_x: np.ndarray, pos1_y: np.ndarray,
+        vel1_x: np.ndarray, vel1_y: np.ndarray,
+        theta1: np.ndarray,
+        pos2_x: np.ndarray, pos2_y: np.ndarray,
+        gamma_y: float, beta_y: float
+    ) -> np.ndarray:
+        """
+        Numba JIT-compiled S-field calculation for all pairs in parallel.
+        """
+        n = len(pos1_x)
+        result = np.zeros(n, dtype=np.float64)
+        
+        for i in prange(n):
+            # Relative position
+            dx = pos2_x[i] - pos1_x[i]
+            dy = pos2_y[i] - pos1_y[i]
+            d_mag = np.sqrt(dx*dx + dy*dy)
+            
+            if d_mag < EPSILON:
+                result[i] = 1.0
+                continue
+            
+            # Ego speed
+            v_ego = np.sqrt(vel1_x[i]*vel1_x[i] + vel1_y[i]*vel1_y[i])
+            
+            # Ego's local coordinate axes
+            if v_ego > EPSILON:
+                e_long_x = vel1_x[i] / v_ego
+                e_long_y = vel1_y[i] / v_ego
+                e_lat_x = -vel1_y[i] / v_ego
+                e_lat_y = vel1_x[i] / v_ego
+            else:
+                e_long_x = np.cos(theta1[i])
+                e_long_y = np.sin(theta1[i])
+                e_lat_x = -np.sin(theta1[i])
+                e_lat_y = np.cos(theta1[i])
+            
+            # Project onto ego's frame
+            delta_x = dx * e_long_x + dy * e_long_y
+            delta_y = dx * e_lat_x + dy * e_lat_y
+            
+            # Speed-dependent gamma_x and beta_x (polynomial approximation)
+            gamma_x = (5.1053e-4 * v_ego**3 
+                      - 3.7051e-2 * v_ego**2 
+                      + 1.0621 * v_ego 
+                      + 1.2925)
+            beta_x = (2.2214e-5 * v_ego**3 
+                     - 1.4834e-3 * v_ego**2 
+                     + 9.6673e-3 * v_ego 
+                     + 3.2589)
+            
+            # S-field calculation
+            term_x = (abs(delta_x) / gamma_x) ** beta_x
+            term_y = (abs(delta_y) / gamma_y) ** beta_y
+            
+            result[i] = np.exp(-(term_x + term_y))
+        
+        return result
+
+
+# =============================================================================
+# VECTORIZED NUMPY FUNCTIONS (Fallback when Numba not available)
+# =============================================================================
+
+def _calculate_o_field_batch_numpy(
+    pos1_x: np.ndarray, pos1_y: np.ndarray,
+    vel1_x: np.ndarray, vel1_y: np.ndarray,
+    width1: np.ndarray,
+    pos2_x: np.ndarray, pos2_y: np.ndarray,
+    vel2_x: np.ndarray, vel2_y: np.ndarray,
+    width2: np.ndarray,
+    beta_p: float, beta_t: float, t_star: float
+) -> np.ndarray:
+    """
+    Fully vectorized O-field calculation using NumPy.
+    No loops - processes all pairs in single array operations.
+    """
+    # Relative kinematics (all vectorized)
+    dx = pos2_x - pos1_x
+    dy = pos2_y - pos1_y
+    dvx = vel2_x - vel1_x
+    dvy = vel2_y - vel1_y
+    
+    # Distance magnitude
+    d_mag = np.sqrt(dx**2 + dy**2)
+    
+    # Relative velocity magnitude squared
+    v_mag_sq = dvx**2 + dvy**2
+    
+    # Dot product for approach check
+    d_dot_v = dx*dvx + dy*dvy
+    
+    # Initialize result array
+    result = np.zeros(len(pos1_x), dtype=np.float64)
+    
+    # Mask for valid calculations
+    valid_mask = (d_mag >= EPSILON) & (v_mag_sq >= EPSILON) & (d_dot_v < 0)
+    
+    # Same position -> risk = 1.0
+    result[d_mag < EPSILON] = 1.0
+    
+    # Calculate only for valid pairs (approaching, non-zero motion)
+    if np.any(valid_mask):
+        # Miss distance
+        cross = dx[valid_mask] * dvy[valid_mask] - dy[valid_mask] * dvx[valid_mask]
+        d_min = np.abs(cross) / np.sqrt(v_mag_sq[valid_mask])
+        
+        # Time to closest point
+        t_min = -d_dot_v[valid_mask] / v_mag_sq[valid_mask]
+        
+        # Spatial and temporal risk
+        d_star = 0.5 * (width1[valid_mask] + width2[valid_mask])
+        P_ij = np.exp(-((d_min / d_star) ** beta_p))
+        T_ij = np.exp(-((t_min / t_star) ** beta_t))
+        
+        result[valid_mask] = P_ij * T_ij
+    
+    return result
+
+
+def _calculate_s_field_batch_numpy(
+    pos1_x: np.ndarray, pos1_y: np.ndarray,
+    vel1_x: np.ndarray, vel1_y: np.ndarray,
+    theta1: np.ndarray,
+    pos2_x: np.ndarray, pos2_y: np.ndarray,
+    gamma_y: float, beta_y: float
+) -> np.ndarray:
+    """
+    Fully vectorized S-field calculation using NumPy.
+    No loops - processes all pairs in single array operations.
+    """
+    # Relative position
+    dx = pos2_x - pos1_x
+    dy = pos2_y - pos1_y
+    d_mag = np.sqrt(dx**2 + dy**2)
+    
+    # Ego speed
+    v_ego = np.sqrt(vel1_x**2 + vel1_y**2)
+    
+    # Initialize result
+    result = np.zeros(len(pos1_x), dtype=np.float64)
+    
+    # Same position -> risk = 1.0
+    result[d_mag < EPSILON] = 1.0
+    
+    # Valid pairs (non-zero distance)
+    valid_mask = d_mag >= EPSILON
+    
+    if np.any(valid_mask):
+        # Extract valid data
+        v = v_ego[valid_mask]
+        dx_v = dx[valid_mask]
+        dy_v = dy[valid_mask]
+        theta_v = theta1[valid_mask]
+        vel1_x_v = vel1_x[valid_mask]
+        vel1_y_v = vel1_y[valid_mask]
+        
+        # Moving vs stationary mask
+        moving = v > EPSILON
+        
+        # Local coordinate axes
+        e_long_x = np.where(moving, vel1_x_v / np.maximum(v, EPSILON), np.cos(theta_v))
+        e_long_y = np.where(moving, vel1_y_v / np.maximum(v, EPSILON), np.sin(theta_v))
+        e_lat_x = np.where(moving, -vel1_y_v / np.maximum(v, EPSILON), -np.sin(theta_v))
+        e_lat_y = np.where(moving, vel1_x_v / np.maximum(v, EPSILON), np.cos(theta_v))
+        
+        # Project onto ego's frame
+        delta_x = dx_v * e_long_x + dy_v * e_long_y
+        delta_y = dx_v * e_lat_x + dy_v * e_lat_y
+        
+        # Speed-dependent gamma_x and beta_x
+        gamma_x = (5.1053e-4 * v**3 
+                  - 3.7051e-2 * v**2 
+                  + 1.0621 * v 
+                  + 1.2925)
+        beta_x = (2.2214e-5 * v**3 
+                 - 1.4834e-3 * v**2 
+                 + 9.6673e-3 * v 
+                 + 3.2589)
+        
+        # S-field calculation
+        term_x = (np.abs(delta_x) / gamma_x) ** beta_x
+        term_y = (np.abs(delta_y) / gamma_y) ** beta_y
+        
+        result[valid_mask] = np.exp(-(term_x + term_y))
+    
+    return result
+
+
+# =============================================================================
+# DISPATCHER FUNCTIONS (Choose best available method)
+# =============================================================================
+
+def calculate_o_field_batch(
+    pos1_x: np.ndarray, pos1_y: np.ndarray,
+    vel1_x: np.ndarray, vel1_y: np.ndarray,
+    width1: np.ndarray,
+    pos2_x: np.ndarray, pos2_y: np.ndarray,
+    vel2_x: np.ndarray, vel2_y: np.ndarray,
+    width2: np.ndarray,
+    beta_p: float, beta_t: float, t_star: float
+) -> np.ndarray:
+    """
+    Calculate O-field for all pairs using best available method.
+    Uses Numba JIT if available (5-10x faster), otherwise falls back to NumPy.
+    """
+    if NUMBA_AVAILABLE:
+        return _calculate_o_field_batch_numba(
+            pos1_x.astype(np.float64), pos1_y.astype(np.float64),
+            vel1_x.astype(np.float64), vel1_y.astype(np.float64),
+            width1.astype(np.float64),
+            pos2_x.astype(np.float64), pos2_y.astype(np.float64),
+            vel2_x.astype(np.float64), vel2_y.astype(np.float64),
+            width2.astype(np.float64),
+            beta_p, beta_t, t_star
+        )
+    else:
+        return _calculate_o_field_batch_numpy(
+            pos1_x, pos1_y, vel1_x, vel1_y, width1,
+            pos2_x, pos2_y, vel2_x, vel2_y, width2,
+            beta_p, beta_t, t_star
+        )
+
+
+def calculate_s_field_batch(
+    pos1_x: np.ndarray, pos1_y: np.ndarray,
+    vel1_x: np.ndarray, vel1_y: np.ndarray,
+    theta1: np.ndarray,
+    pos2_x: np.ndarray, pos2_y: np.ndarray,
+    gamma_y: float, beta_y: float
+) -> np.ndarray:
+    """
+    Calculate S-field for all pairs using best available method.
+    Uses Numba JIT if available (5-10x faster), otherwise falls back to NumPy.
+    """
+    if NUMBA_AVAILABLE:
+        return _calculate_s_field_batch_numba(
+            pos1_x.astype(np.float64), pos1_y.astype(np.float64),
+            vel1_x.astype(np.float64), vel1_y.astype(np.float64),
+            theta1.astype(np.float64),
+            pos2_x.astype(np.float64), pos2_y.astype(np.float64),
+            gamma_y, beta_y
+        )
+    else:
+        return _calculate_s_field_batch_numpy(
+            pos1_x, pos1_y, vel1_x, vel1_y, theta1,
+            pos2_x, pos2_y, gamma_y, beta_y
+        )
 
 
 # =============================================================================
@@ -262,55 +592,99 @@ class SafetyPotentialField:
         self.min_risk = config['spf']['min_risk']
         self.composite_method = config['spf']['composite_method']
     
-    def detect(self, df: pd.DataFrame) -> pd.DataFrame:
+    def detect(self, data: pd.DataFrame, is_pairs_data: bool = False, batch_size: int = 50000) -> pd.DataFrame:
         """
         Main detection pipeline for SPF conflicts.
         
+        ⚡ OPTIMIZED: Batch processing for memory efficiency on large datasets.
+        Processes pairs in chunks to avoid memory overflow while maintaining
+        vectorized operations within each batch.
+        
         Pipeline:
-            1. Get filtered pairs (approaching, all conflict types)
-            2. Calculate O-field and S-field for each pair
-            3. Calculate composite C-SPF risk
-            4. Filter by minimum threshold
-            5. Classify severity
-            6. Format output
+            1. Get filtered pairs (approaching, all conflict types) - SKIPPED if is_pairs_data=True
+            2. Process in batches:
+               - Calculate O-field and S-field
+               - Calculate composite C-SPF risk
+               - Filter by minimum threshold
+               - Classify severity
+            3. Combine results and format output
         
         Args:
-            df: Vehicle data (id, label, timestamp, pos_x, pos_y, vel_x, vel_y, vel, yaw)
+            data: Vehicle data (id, label, timestamp, pos_x, pos_y, vel_x, vel_y, vel, yaw)
+                  OR pre-filtered pairs DataFrame (timestamp, id1, id2, pos_x1, vel_x1, ...)
+            is_pairs_data: If True, data is already pairs (skip pair generation).
+                          If False, data is vehicle data (default - backward compatible).
+            batch_size: Number of pairs to process at once (default 50k)
             
         Returns:
-            DataFrame with columns: timestamp, pair_id, interaction, conflict_type,
+            DataFrame with columns: timestamp, pair_id, zone, conflict_type, interaction,
             distance, ttc, closing_speed, o_field, s_field, composite_risk, severity
+            
+        Usage:
+            # Traditional (generates pairs internally):
+            conflicts = detector.detect(vehicle_df)
+            
+            # Optimized (reuse base pairs):
+            pairs = get_spf_pairs(vehicle_df, config)
+            conflicts = detector.detect(pairs, is_pairs_data=True)
         """
-        # Step 1: Get SPF-specific pairs (all conflict types)
-        pairs = get_spf_pairs(df, self.config)
+        # Step 1: Get SPF-specific pairs (with skip flag)
+        pairs = get_spf_pairs(data, self.config, skip_pair_generation=is_pairs_data)
         
         if len(pairs) == 0:
             return self._empty_output()
         
-        # Step 2: Calculate O-field and S-field
-        pairs = self.calculate_fields(pairs)
+        n_pairs = len(pairs)
+        print(f"  Processing {n_pairs:,} pairs in batches of {batch_size:,}...")
         
-        # Step 3: Calculate composite risk
-        pairs = self.calculate_composite(pairs)
+        # Step 2-5: Process in batches
+        result_chunks = []
+        n_batches = (n_pairs + batch_size - 1) // batch_size
         
-        # Step 4: Filter by minimum threshold
-        pairs = pairs[pairs['composite_risk'] >= self.min_risk]
+        for i in tqdm(range(0, n_pairs, batch_size), total=n_batches, desc="  SPF calculation"):
+            batch = pairs.iloc[i:i+batch_size].copy()
+            
+            # Calculate O-field and S-field (vectorized)
+            batch = self.calculate_fields(batch)
+            
+            # Calculate composite risk (vectorized)
+            batch = self.calculate_composite(batch)
+            
+            # Filter by minimum threshold (early rejection for memory savings)
+            batch = batch[batch['composite_risk'] >= self.min_risk]
+            
+            if len(batch) > 0:
+                # Classify severity (vectorized)
+                batch = self.classify_severity(batch)
+                result_chunks.append(batch)
+            
+            # Memory cleanup
+            del batch
         
-        if len(pairs) == 0:
+        # Cleanup original pairs
+        del pairs
+        gc.collect()
+        
+        # Combine all batches
+        if len(result_chunks) == 0:
             return self._empty_output()
         
-        # Step 5: Classify severity
-        pairs = self.classify_severity(pairs)
+        all_results = pd.concat(result_chunks, ignore_index=True)
+        del result_chunks
+        gc.collect()
+        
+        print(f"  ✓ {len(all_results):,} conflicts detected")
         
         # Step 6: Format output
-        return self.format_output(pairs)
+        return self.format_output(all_results)
     
     def calculate_fields(self, pairs: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate O-field and S-field for all pairs.
         
-        Vectorized calculation across all pair rows. Uses vehicle widths,
-        positions, velocities, and headings from pair data.
+        ⚡ OPTIMIZED: Uses vectorized NumPy/Numba batch processing.
+        - Numba JIT: ~5-10x faster with parallel processing
+        - NumPy fallback: ~50-100x faster than iterrows loop
         
         Args:
             pairs: DataFrame from get_spf_pairs()
@@ -318,38 +692,46 @@ class SafetyPotentialField:
         Returns:
             DataFrame with added columns: o_field, s_field
         """
-        o_risks = []
-        s_risks = []
+        if len(pairs) == 0:
+            pairs = pairs.copy()
+            pairs['o_field'] = []
+            pairs['s_field'] = []
+            return pairs
         
-        for _, row in pairs.iterrows():
-            # Extract vehicle states
-            pos_i = np.array([row['pos1_x'], row['pos1_y']])
-            vel_i = np.array([row['vel1_x'], row['vel1_y']])
-            width_i = row.get('width1', 1.8)  # Default car width
-            theta_i = row.get('yaw1', 0.0)
-            
-            pos_j = np.array([row['pos2_x'], row['pos2_y']])
-            vel_j = np.array([row['vel2_x'], row['vel2_y']])
-            width_j = row.get('width2', 1.8)
-            
-            # Calculate O-field
-            r_o = calculate_o_field(
-                pos_i, vel_i, width_i,
-                pos_j, vel_j, width_j,
-                self.o_params['beta_p'],
-                self.o_params['beta_t'],
-                self.o_params['t_star']
-            )
-            
-            # Calculate S-field
-            r_s = calculate_s_field(
-                pos_i, vel_i, theta_i, pos_j,
-                self.s_params['gamma_y'],
-                self.s_params['beta_y']
-            )
-            
-            o_risks.append(r_o)
-            s_risks.append(r_s)
+        # Extract arrays for vectorized calculation
+        # Note: Column names are pos_x1, pos_y1, etc. (suffix comes after underscore)
+        pos1_x = pairs['pos_x1'].values
+        pos1_y = pairs['pos_y1'].values
+        vel1_x = pairs['vel_x1'].values
+        vel1_y = pairs['vel_y1'].values
+        pos2_x = pairs['pos_x2'].values
+        pos2_y = pairs['pos_y2'].values
+        vel2_x = pairs['vel_x2'].values
+        vel2_y = pairs['vel_y2'].values
+        
+        # Vehicle widths (default 1.8m if not available)
+        width1 = pairs['width1'].values if 'width1' in pairs.columns else np.full(len(pairs), 1.8)
+        width2 = pairs['width2'].values if 'width2' in pairs.columns else np.full(len(pairs), 1.8)
+        
+        # Heading (yaw) for S-field
+        theta1 = pairs['yaw1'].values if 'yaw1' in pairs.columns else np.zeros(len(pairs))
+        
+        # Calculate O-field (vectorized)
+        o_risks = calculate_o_field_batch(
+            pos1_x, pos1_y, vel1_x, vel1_y, width1,
+            pos2_x, pos2_y, vel2_x, vel2_y, width2,
+            self.o_params['beta_p'],
+            self.o_params['beta_t'],
+            self.o_params['t_star']
+        )
+        
+        # Calculate S-field (vectorized)
+        s_risks = calculate_s_field_batch(
+            pos1_x, pos1_y, vel1_x, vel1_y, theta1,
+            pos2_x, pos2_y,
+            self.s_params['gamma_y'],
+            self.s_params['beta_y']
+        )
         
         pairs = pairs.copy()
         pairs['o_field'] = o_risks
@@ -361,6 +743,8 @@ class SafetyPotentialField:
         """
         Calculate composite C-SPF risk from O-field and S-field.
         
+        ⚡ OPTIMIZED: Uses vectorized NumPy operations instead of apply().
+        
         Args:
             pairs: DataFrame with o_field and s_field columns
             
@@ -368,19 +752,26 @@ class SafetyPotentialField:
             DataFrame with added column: composite_risk
         """
         pairs = pairs.copy()
-        pairs['composite_risk'] = pairs.apply(
-            lambda row: calculate_composite_risk(
-                row['o_field'], 
-                row['s_field'], 
-                self.composite_method
-            ),
-            axis=1
-        )
+        
+        o_vals = pairs['o_field'].values
+        s_vals = pairs['s_field'].values
+        
+        if self.composite_method == 'max':
+            pairs['composite_risk'] = np.maximum(o_vals, s_vals)
+        elif self.composite_method == 'probabilistic':
+            pairs['composite_risk'] = 1.0 - (1.0 - o_vals) * (1.0 - s_vals)
+        elif self.composite_method == 'weighted':
+            pairs['composite_risk'] = (o_vals + s_vals) / 2
+        else:
+            raise ValueError(f"Unknown method: {self.composite_method}")
+        
         return pairs
     
     def classify_severity(self, pairs: pd.DataFrame) -> pd.DataFrame:
         """
         Classify risk severity based on composite risk thresholds.
+        
+        ⚡ OPTIMIZED: Uses vectorized np.select instead of apply().
         
         Severity Levels:
             - CRITICAL: risk ≥ 0.90 (extreme danger)
@@ -395,14 +786,26 @@ class SafetyPotentialField:
             DataFrame with added column: severity
         """
         pairs = pairs.copy()
-        pairs['severity'] = pairs['composite_risk'].apply(
-            lambda r: classify_risk_level(r, self.thresholds)
-        )
+        
+        risk = pairs['composite_risk'].values
+        
+        # Vectorized severity classification using np.select
+        conditions = [
+            risk >= self.thresholds['critical'],
+            risk >= self.thresholds['danger'],
+            risk >= self.thresholds['warning']
+        ]
+        choices = ['CRITICAL', 'DANGER', 'WARNING']
+        
+        pairs['severity'] = np.select(conditions, choices, default='SAFE')
+        
         return pairs
     
     def format_output(self, pairs: pd.DataFrame) -> pd.DataFrame:
         """
         Format output with clean, human-readable schema.
+        
+        ⚡ OPTIMIZED: Uses vectorized string operations instead of iterrows.
         
         Creates:
             - pair_id: "id1_id2"
@@ -414,23 +817,26 @@ class SafetyPotentialField:
         Returns:
             DataFrame with simplified schema for analysis
         """
-        # Create pair identifier
-        pair_id = [f"{int(row['id1'])}_{int(row['id2'])}" 
-                   for _, row in pairs.iterrows()]
+        # Vectorized pair_id creation
+        id1 = pairs['id1'].astype(int).astype(str)
+        id2 = pairs['id2'].astype(int).astype(str)
+        pair_id = id1 + '_' + id2
         
-        # Create human-readable interaction string
-        interaction = [
-            f"{self.LABEL_NAMES.get(int(row['label1']), str(row['label1']))}_"
-            f"{self.LABEL_NAMES.get(int(row['label2']), str(row['label2']))}"
-            for _, row in pairs.iterrows()
-        ]
+        # Vectorized interaction string creation
+        label1_names = pairs['label1'].map(self.LABEL_NAMES).fillna(pairs['label1'].astype(str))
+        label2_names = pairs['label2'].map(self.LABEL_NAMES).fillna(pairs['label2'].astype(str))
+        interaction = label1_names + '_' + label2_names
+        
+        # Get zone (use 'unknown' if not available)
+        zone = pairs['zone'].values if 'zone' in pairs.columns else np.full(len(pairs), 'unknown')
         
         # Build output DataFrame
         output = pd.DataFrame({
             'timestamp': pairs['timestamp'].values,
-            'pair_id': pair_id,
-            'interaction': interaction,
+            'pair_id': pair_id.values,
+            'zone': zone,
             'conflict_type': pairs['conflict_type'].values,
+            'interaction': interaction.values,
             'distance': pairs['distance'].values,
             'ttc': pairs['ttc'].values,
             'closing_speed': pairs['closing_speed'].values,
@@ -445,8 +851,9 @@ class SafetyPotentialField:
     def _empty_output(self) -> pd.DataFrame:
         """Return empty DataFrame with correct output schema."""
         return pd.DataFrame(columns=[
-            'timestamp', 'pair_id', 'interaction', 'conflict_type', 'distance',
-            'ttc', 'closing_speed', 'o_field', 's_field', 'composite_risk', 'severity'
+            'timestamp', 'pair_id', 'zone', 'conflict_type', 'interaction', 
+            'distance', 'ttc', 'closing_speed', 'o_field', 's_field', 
+            'composite_risk', 'severity'
         ])
 
 

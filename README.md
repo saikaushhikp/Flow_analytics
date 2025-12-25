@@ -15,6 +15,7 @@ prem/
 │   └── evt.py                    # Extreme Value Theory (placeholder)
 ├── base_v2.ipynb                 # Main analysis notebook
 ├── config.yaml                   # Configuration parameters
+├── plotter.py                    # Trajectory visualization module
 ├── docs/                         # Documentation
 │   ├── base_code.md             # Base code documentation
 │   ├── MDRAC_implementation.md  # M-DRAC technical details
@@ -24,7 +25,9 @@ prem/
 │       ├── week2.md
 │       └── week3.md
 └── results/                      # Analysis outputs
-    └── mdrac_conflicts.csv
+    ├── mdrac_conflicts.csv
+    └── plots/                   # Visualization outputs
+        └── {id1}_{id2}/         # Pair-specific folders
 ```
 
 ## Implemented Methods
@@ -224,6 +227,38 @@ closing_speed, o_field, s_field, composite_risk, severity
 - **Medium dataset** (1 day, ~100K objects): 2-5 minutes
 - **Large dataset** (1 week, ~700K objects): 15-30 minutes
 
+## Visualization
+
+### Trajectory Plotter
+**File:** `plotter.py`
+
+Generates comprehensive conflict analysis plots:
+
+```python
+from plotter import plot_conflict_analysis
+
+# Analyze a specific pair
+plot_conflict_analysis(
+    df,
+    id1=10538900,
+    id2=10539068,
+    output_dir='results/plots',
+    show_plot=True
+)
+```
+
+**Output plots:**
+- `trajectory.png` - 2D spatial trajectories with minimum distance
+- `distance.png` - Distance over time
+- `closing_speed.png` - Closing speed over time (approaching/separating)
+- `velocity.png` - Individual vehicle velocities over time
+
+**Features:**
+- Automatic pair-specific folder creation (`results/plots/{id1}_{id2}/`)
+- Synchronized timestamp analysis
+- Professional styling with consistent colors
+- Minimum distance highlighting
+
 ## Development Timeline
 
 ### Week 1 (Dec 9-15)
@@ -237,11 +272,12 @@ closing_speed, o_field, s_field, composite_risk, severity
 - SPF implementation
 - Trajectory visualization module
 
-### Week 3 (Dec 23+)
+### Week 3 (Dec 23-24)
 - Code refactoring and modularization
 - Enhanced documentation
 - Configuration management
 - Function naming improvements
+- Plotter refactoring with velocity plot addition
 
 ## References
 

@@ -11,12 +11,16 @@ wheels/
 *env*
 .vscode/
 
+# data directories
 *Data*
 *data*
-*V1*
+
+# Reference & testing files
+*test*
 base/
 others/
 
+# Sensitive files
 *pem
 *key*
 *secrets*

@@ -63,30 +63,41 @@ class ModifiedDRAC:
             config = load_config()
         
         self.config = config
-        self.prt = config['mdrac']['prt']  # Perception-Reaction Time by vehicle type
-        self.min_mdrac = config['mdrac']['min_mdrac']  # Minimum threshold for detection
+        self.prt = config['mdrac']['prt']                       # Perception-Reaction Time by vehicle type
+        self.min_mdrac = config['mdrac']['min_mdrac']           # Minimum threshold for detection
         self.severity_thresholds = config['mdrac']['severity']  # Severity classification
     
-    def detect(self, df: pd.DataFrame) -> pd.DataFrame:
+    def detect(self, data: pd.DataFrame, is_pairs_data: bool = False) -> pd.DataFrame:
         """
         Main detection pipeline for MDRAC conflicts.
         
         Pipeline:
-            1. Get filtered pairs (same-lane, car-following)
+            1. Get filtered pairs (same-lane, car-following) - SKIPPED if is_pairs_data=True
             2. Calculate MDRAC values
             3. Filter by minimum threshold
             4. Classify severity
             5. Format output
         
         Args:
-            df: Vehicle data (id, label, timestamp, pos_x, pos_y, vel_x, vel_y, vel, yaw)
+            data: Vehicle data (id, label, timestamp, pos_x, pos_y, vel_x, vel_y, vel, yaw)
+                  OR pre-filtered pairs DataFrame (timestamp, id1, id2, pos_x1, vel_x1, ...)
+            is_pairs_data: If True, data is already pairs (skip pair generation).
+                          If False, data is vehicle data (default - backward compatible).
                 
         Returns:
-            DataFrame with columns: timestamp, pair_id, interaction, distance,
-            ttc, closing_speed, speed_diff, mdrac, severity
+            DataFrame with columns: timestamp, pair_id, zone, conflict_type, interaction,
+            distance, ttc, closing_speed, speed_diff, mdrac, severity
+            
+        Usage:
+            # Traditional (generates pairs internally):
+            conflicts = detector.detect(vehicle_df)
+            
+            # Optimized (reuse base pairs):
+            pairs = get_mdrac_pairs(vehicle_df, config)
+            conflicts = detector.detect(pairs, is_pairs_data=True)
         """
-        # Step 1: Get MDRAC-specific pairs (same-lane car-following)
-        pairs = get_mdrac_pairs(df, self.config)
+        # Step 1: Get MDRAC-specific pairs (with skip flag)
+        pairs = get_mdrac_pairs(data, self.config, skip_pair_generation=is_pairs_data)
         
         if len(pairs) == 0:
             return self._empty_output()
@@ -231,21 +242,24 @@ class ModifiedDRAC:
             pairs['label2']
         )
         
-        # Create human-readable interaction string
-        interaction = [
-            f"{self.LABEL_NAMES.get(int(lead), str(lead))}_"
-            f"{self.LABEL_NAMES.get(int(foll), str(foll))}"
-            for lead, foll in zip(leader_label, follower_label)
-        ]
+        # Vectorized interaction string creation using pandas Series
+        leader_names = pd.Series(leader_label).map(self.LABEL_NAMES).fillna(pd.Series(leader_label).astype(str))
+        follower_names = pd.Series(follower_label).map(self.LABEL_NAMES).fillna(pd.Series(follower_label).astype(str))
+        interaction = leader_names + '_' + follower_names
         
         # Create pair identifier
-        pair_id = [f"{lead}_{foll}" for lead, foll in zip(leader_id, follower_id)]
+        pair_id = pd.Series(leader_id).astype(int).astype(str) + '_' + pd.Series(follower_id).astype(int).astype(str)
+        
+        # Get zone (use 'unknown' if not available)
+        zone = pairs['zone'].values if 'zone' in pairs.columns else np.full(len(pairs), 'unknown')
         
         # Build output DataFrame
         output = pd.DataFrame({
             'timestamp': pairs['timestamp'].values,
-            'pair_id': pair_id,
-            'interaction': interaction,
+            'pair_id': pair_id.values,
+            'zone': zone,
+            'conflict_type': 'rear-end',  # MDRAC is always rear-end/longitudinal
+            'interaction': interaction.values,
             'distance': pairs['distance'].values,
             'ttc': pairs['ttc'].values,
             'closing_speed': pairs['closing_speed'].values,
@@ -259,8 +273,8 @@ class ModifiedDRAC:
     def _empty_output(self) -> pd.DataFrame:
         """Return empty DataFrame with correct schema."""
         return pd.DataFrame(columns=[
-            'timestamp', 'pair_id', 'interaction', 'distance', 'ttc',
-            'closing_speed', 'speed_diff', 'mdrac', 'severity'
+            'timestamp', 'pair_id', 'zone', 'conflict_type', 'interaction', 
+            'distance', 'ttc', 'closing_speed', 'speed_diff', 'mdrac', 'severity'
         ])
 
 
