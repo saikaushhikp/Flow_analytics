@@ -807,9 +807,8 @@ class SafetyPotentialField:
         
         ⚡ OPTIMIZED: Uses vectorized string operations instead of iterrows.
         
-        Creates:
-            - pair_id: "id1_id2"
-            - interaction: "type1_type2" (e.g., "car_truck")
+        Schema: timestamp, id1, id2, [label1]_v_[label2], dist, TTC, composite_risk,
+                closing_speed, speed_diff, yaw_diff, link
         
         Args:
             pairs: DataFrame with all calculated values
@@ -817,43 +816,48 @@ class SafetyPotentialField:
         Returns:
             DataFrame with simplified schema for analysis
         """
-        # Vectorized pair_id creation
-        id1 = pairs['id1'].astype(int).astype(str)
-        id2 = pairs['id2'].astype(int).astype(str)
-        pair_id = id1 + '_' + id2
-        
         # Vectorized interaction string creation
         label1_names = pairs['label1'].map(self.LABEL_NAMES).fillna(pairs['label1'].astype(str))
         label2_names = pairs['label2'].map(self.LABEL_NAMES).fillna(pairs['label2'].astype(str))
-        interaction = label1_names + '_' + label2_names
+        interaction = label1_names + '_v_' + label2_names
         
-        # Get zone (use 'unknown' if not available)
-        zone = pairs['zone'].values if 'zone' in pairs.columns else np.full(len(pairs), 'unknown')
+        # Calculate yaw difference (absolute)
+        yaw_diff = np.abs(pairs['yaw1'].values - pairs['yaw2'].values)
+        # Normalize to [0, pi]
+        yaw_diff = np.where(yaw_diff > np.pi, 2*np.pi - yaw_diff, yaw_diff)
+        yaw_diff = np.degrees(yaw_diff)  # Convert to degrees
+        
+        # Calculate speed difference (absolute)
+        speed_diff = np.abs(pairs['vel1'].values - pairs['vel2'].values)
+        
+        # Generate replay links
+        # Format: https://di-india-collab.flow-analytics.io/tools/replay/{date}T{time-10s}Z
+        timestamps = pd.to_datetime(pairs['timestamp'])
+        replay_times = timestamps - pd.Timedelta(seconds=10)
+        links = replay_times.apply(lambda t: f"https://di-india-collab.flow-analytics.io/tools/replay/{t.strftime('%Y-%m-%d')}T{t.strftime('%H:%M:%S')}Z")
         
         # Build output DataFrame
         output = pd.DataFrame({
             'timestamp': pairs['timestamp'].values,
-            'pair_id': pair_id.values,
-            'zone': zone,
-            'conflict_type': pairs['conflict_type'].values,
+            'id1': pairs['id1'].values,
+            'id2': pairs['id2'].values,
             'interaction': interaction.values,
-            'distance': pairs['distance'].values,
-            'ttc': pairs['ttc'].values,
-            'closing_speed': pairs['closing_speed'].values,
-            'o_field': pairs['o_field'].values,
-            's_field': pairs['s_field'].values,
+            'dist': pairs['distance'].values,
+            'TTC': pairs['ttc'].values,
             'composite_risk': pairs['composite_risk'].values,
-            'severity': pairs['severity'].values
+            'closing_speed': pairs['closing_speed'].values,
+            'speed_diff': speed_diff,
+            'yaw_diff': yaw_diff,
+            'link': links.values
         })
         
         return output
     
     def _empty_output(self) -> pd.DataFrame:
-        """Return empty DataFrame with correct output schema."""
+        """Return empty DataFrame with correct schema."""
         return pd.DataFrame(columns=[
-            'timestamp', 'pair_id', 'zone', 'conflict_type', 'interaction', 
-            'distance', 'ttc', 'closing_speed', 'o_field', 's_field', 
-            'composite_risk', 'severity'
+            'timestamp', 'id1', 'id2', 'interaction', 'dist', 'TTC', 
+            'composite_risk', 'closing_speed', 'speed_diff', 'yaw_diff', 'link'
         ])
 
 

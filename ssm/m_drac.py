@@ -208,9 +208,8 @@ class ModifiedDRAC:
         """
         Format final output with clean schema.
         
-        Creates:
-            - pair_id: "leader_id_follower_id" (e.g., "10295_10287")
-            - interaction: "leader_type_follower_type" (e.g., "car_truck")
+        Schema: timestamp, id1, id2, [label1]_v_[label2], leader, dist, TTC, MDRAC, 
+                closing_speed, speed_diff, yaw_diff, link
         
         Args:
             pairs: DataFrame with all calculated values
@@ -218,54 +217,44 @@ class ModifiedDRAC:
         Returns:
             DataFrame with simplified schema for analysis
         """
-        # Determine leader and follower IDs
+        # Determine leader ID
         leader_id = np.where(
             pairs['is_veh1_follower'],
             pairs['id2'],  # veh2 is leader
             pairs['id1']   # veh1 is leader
         )
-        follower_id = np.where(
-            pairs['is_veh1_follower'],
-            pairs['id1'],  # veh1 is follower
-            pairs['id2']   # veh2 is follower
-        )
         
-        # Determine leader and follower vehicle types
-        leader_label = np.where(
-            pairs['is_veh1_follower'],
-            pairs['label2'],
-            pairs['label1']
-        )
-        follower_label = np.where(
-            pairs['is_veh1_follower'],
-            pairs['label1'],
-            pairs['label2']
-        )
+        # Get label names
+        label1_names = pd.Series(pairs['label1'].values).map(self.LABEL_NAMES).fillna(pairs['label1'].astype(str))
+        label2_names = pd.Series(pairs['label2'].values).map(self.LABEL_NAMES).fillna(pairs['label2'].astype(str))
+        interaction = label1_names + '_v_' + label2_names
         
-        # Vectorized interaction string creation using pandas Series
-        leader_names = pd.Series(leader_label).map(self.LABEL_NAMES).fillna(pd.Series(leader_label).astype(str))
-        follower_names = pd.Series(follower_label).map(self.LABEL_NAMES).fillna(pd.Series(follower_label).astype(str))
-        interaction = leader_names + '_' + follower_names
+        # Calculate yaw difference (absolute)
+        yaw_diff = np.abs(pairs['yaw1'].values - pairs['yaw2'].values)
+        # Normalize to [0, pi]
+        yaw_diff = np.where(yaw_diff > np.pi, 2*np.pi - yaw_diff, yaw_diff)
+        yaw_diff = np.degrees(yaw_diff)  # Convert to degrees
         
-        # Create pair identifier
-        pair_id = pd.Series(leader_id).astype(int).astype(str) + '_' + pd.Series(follower_id).astype(int).astype(str)
-        
-        # Get zone (use 'unknown' if not available)
-        zone = pairs['zone'].values if 'zone' in pairs.columns else np.full(len(pairs), 'unknown')
+        # Generate replay links
+        # Format: https://di-india-collab.flow-analytics.io/tools/replay/{date}T{time-10s}Z
+        timestamps = pd.to_datetime(pairs['timestamp'])
+        replay_times = timestamps - pd.Timedelta(seconds=10)
+        links = replay_times.apply(lambda t: f"https://di-india-collab.flow-analytics.io/tools/replay/{t.strftime('%Y-%m-%d')}T{t.strftime('%H:%M:%S')}Z")
         
         # Build output DataFrame
         output = pd.DataFrame({
             'timestamp': pairs['timestamp'].values,
-            'pair_id': pair_id.values,
-            'zone': zone,
-            'conflict_type': 'rear-end',  # MDRAC is always rear-end/longitudinal
+            'id1': pairs['id1'].values,
+            'id2': pairs['id2'].values,
             'interaction': interaction.values,
-            'distance': pairs['distance'].values,
-            'ttc': pairs['ttc'].values,
+            'leader': leader_id,
+            'dist': pairs['distance'].values,
+            'TTC': pairs['ttc'].values,
+            'MDRAC': pairs['mdrac'].values,
             'closing_speed': pairs['closing_speed'].values,
             'speed_diff': pairs['speed_diff'].values,
-            'mdrac': pairs['mdrac'].values,
-            'severity': pairs['severity'].values
+            'yaw_diff': yaw_diff,
+            'link': links.values
         })
         
         return output
@@ -273,8 +262,8 @@ class ModifiedDRAC:
     def _empty_output(self) -> pd.DataFrame:
         """Return empty DataFrame with correct schema."""
         return pd.DataFrame(columns=[
-            'timestamp', 'pair_id', 'zone', 'conflict_type', 'interaction', 
-            'distance', 'ttc', 'closing_speed', 'speed_diff', 'mdrac', 'severity'
+            'timestamp', 'id1', 'id2', 'interaction', 'leader', 'dist', 'TTC', 
+            'MDRAC', 'closing_speed', 'speed_diff', 'yaw_diff', 'link'
         ])
 
 
