@@ -21,8 +21,8 @@ filters:
   max_distance: 8.0            # m, maximum distance between vehicles to consider
   max_lateral_distance: 2.0     # m, maximum perpendicular distance (same lane check)
   max_ttc: 2.0                  # seconds, captures moderate to critical near-misses
-  min_closing_speed: 2.0        # m/s, filters slow-closing interactions
-  min_speed_diff: 1.5           # m/s, follower must be faster than leader
+  min_closing_speed: 1.0        # m/s, filters slow-closing interactions
+  min_speed_diff: 1.0           # m/s, follower must be faster than leader
 
 # M-DRAC (Modified Deceleration Rate to Avoid Crash) parameters
 mdrac:

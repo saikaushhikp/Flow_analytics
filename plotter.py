@@ -463,11 +463,10 @@ if __name__ == "__main__":
     END_DATE = "2025-06-01"
     
     # Vehicle IDs to analyze
-    # 10538900_10539068 posibly a near miss
+    # 10538900_10539068 possibly a near miss
     # 10718058_10718064 - near miss
-    # 10292655_10292540, 10447042_10446808 - A false positive case, commonly detected as a near miss
-    ID1 = 10447042
-    ID2 = 10446808
+    ID1 = 10475052
+    ID2 = 10475618
     
     # Load data
     df = load_data(DATA_DIR, START_DATE, END_DATE)

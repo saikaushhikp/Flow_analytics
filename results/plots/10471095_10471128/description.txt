@@ -1,0 +1,5 @@
+Yes but might also be a Detection fault since 
+the vehicles have merging bounding boxes.
+
+But they have decelerated around 15 secs when the distance was least!
+So this can be considered a REAR-END near miss.
