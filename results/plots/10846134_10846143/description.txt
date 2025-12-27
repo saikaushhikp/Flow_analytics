@@ -1,0 +1,3 @@
+Yes. 
+Seems like a near miss case. 
+Can be also a detection error but sharp drop in velocity observed.

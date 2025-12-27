@@ -1,0 +1,5 @@
+No
+Was a detection fault
+The leader -238 was parked for picking up people
+Suddenly it was shown to be in between the road.
+Detection ERROR.

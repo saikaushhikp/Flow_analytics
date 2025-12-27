@@ -464,9 +464,9 @@ if __name__ == "__main__":
     
     # Vehicle IDs to analyze
     # 10538900_10539068 possibly a near miss
-    # 10718058_10718064 - near miss
-    ID1 = 10475052
-    ID2 = 10475618
+    # 10504828_10505632 - opposite directions but a possible near miss
+    ID1 = 10936238
+    ID2 = 10936713
     
     # Load data
     df = load_data(DATA_DIR, START_DATE, END_DATE)
