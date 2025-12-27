@@ -699,47 +699,147 @@ config.yaml: [Centralized]
 - ⏳ Edge case testing
 - ⏳ Documentation finalization
 
-#### **Thursday-Sunday, Dec 26-29** - Planned
-- ⏳ Advanced features exploration
-- ⏳ Paper writing/results analysis
+#### **Thursday, December 26, 2025**
+**Commits:** `e507296`, `33747f9`, `38cddd5`, `4a3a340`  
+**Work:** Output schema redesign, threshold optimization, lane filtering
 
-### Completed (Dec 23):
+**Major Changes:**
+- ✅ **Output Schema Redesign**
+  - Removed unnecessary columns: `pos_x1, pos_y1, vel_x1, vel_y1, vel1, yaw1, pos_x2, pos_y2, vel_x2, vel_y2, vel2, yaw2`
+  - Added: `yaw_diff` (angular difference in degrees)
+  - Added: `link` (replay URL: `https://di-india-collab.flow-analytics.io/tools/replay/{date}T{time-10s}Z`)
+  - Changed: `interaction` format to `[label1]_v_[label2]` (e.g., `car_v_truck`)
+  - Renamed: `distance` → `dist`, `ttc` → `TTC`, `mdrac` → `MDRAC`
+  - M-DRAC: Added `leader` column (ID of leading vehicle)
+  - SPF: Added `speed_diff` calculation
+
+- ✅ **Configuration Updates**
+  - `max_distance`: 10.0 → 8.0 m (stricter proximity)
+  - `max_lateral_distance`: 2.5 → 2.0 m (tighter same-lane check)
+  - `max_ttc`: 3.0 → 2.0 s (focus on imminent conflicts)
+  - `min_closing_speed`: 0.5 → 1.0 m/s (faster approach required)
+  - `min_speed_diff`: 0.5 → 1.0 m/s (more significant speed difference)
+
+- ✅ **Results Analysis**
+  - Generated MDRAC conflicts: 1,700+ detections
+  - Generated SPF conflicts: 8,600+ detections
+  - Created 18+ case study visualizations in `results/plots/`
+  - Added description files for each analyzed pair
+
+**Observations:**
+- High detection count indicates need for post-processing
+- Many duplicate pair detections across timestamps
+- SPF more sensitive than M-DRAC (expected for general conflicts)
+
+---
+
+#### **Friday, December 27, 2025**
+**Work:** Workflow optimization, lane filtering implementation
+
+**Major Refactoring:**
+- ✅ **Optimized Workflow Implementation**
+  - Added boolean flags: `skip_pair_generation`, `is_pairs_data`
+  - Generate base pairs ONCE, reuse for both detectors
+  - Performance: ~2.27x speedup on test data (0.27s → 0.12s for 10k timestamps)
+  - Backward compatible: old workflow still works
+
+- ✅ **Lane-Only Detection**
+  - Filter to vehicles in lanes only (exclude 'unknown' zone)
+  - Prevents false positives from vehicles outside analysis area
+  - More accurate conflict detection in defined lanes
+
+- ✅ **Test Suite**
+  - Created `ssm/test_refactored.py`
+  - Validated: M-DRAC 14=14, SPF 19=19 conflicts (exact match)
+  - Confirmed: 55.9% time savings with new workflow
+
+**Code Changes:**
+- `ssm/m_drac.py`: Added `is_pairs_data` parameter to `detect()`
+- `ssm/spf.py`: Added `is_pairs_data` parameter to `detect()`
+- `ssm/utils.py`: Added `skip_pair_generation` to `get_mdrac_pairs()` and `get_spf_pairs()`
+- `base_v2.ipynb`: Updated cells 48-53 with optimized 3-step workflow
+- `plotter.py`: Fixed ID mismatch in test execution
+
+**Documentation:**
+- Updated README with optimized workflow examples
+- Updated output schema documentation
+- Updated configuration parameter descriptions
+
+---
+
+#### **Saturday-Sunday, Dec 28-29** - Planned
+- ⏳ Temporal deduplication implementation
+- ⏳ False positive filtering
+- ⏳ Threshold calibration analysis
+- ⏳ Advanced visualization features
+
+### Completed (Dec 23)::
+
+**Dec 23:**
 1. ✅ **Code Refactoring** - M-DRAC, Utils, SPF modules
 2. ✅ **Documentation Enhancement** - Comprehensive docstrings
 3. ✅ **Configuration Management** - Centralized parameters
 4. ✅ **Architecture Improvement** - Modular design
 
+**Dec 25:**
+1. ✅ **Full Pipeline Integration** - Working SPF + M-DRAC detection
+2. ✅ **Results Generation** - 8,600+ SPF, 1,700+ M-DRAC conflicts
+3. ✅ **Threshold Testing** - Validated detection parameters
+
+**Dec 26:**
+1. ✅ **Output Schema Redesign** - Cleaner, more usable format
+2. ✅ **Stricter Thresholds** - Reduced false positives
+3. ✅ **Case Study Analysis** - 18+ visualized conflicts
+4. ✅ **Replay Link Generation** - Automated URL creation
+
+**Dec 27:**
+1. ✅ **Workflow Optimization** - 2.27x speedup
+2. ✅ **Lane Filtering** - More accurate detection
+3. ✅ **Test Suite** - Validation framework
+4. ✅ **Documentation Update** - README, progress logs
+
 ### Key Achievements:
 - **-300 lines** of redundant code removed
 - **+280 lines** of documentation added
 - **6 new modular functions** for reusability
-- **100% removal** of code duplication
-- **35% increase** in documentation coverage
-- **1 full day** of focused refactoring
+- **2.27x performance improvement** with optimized workflow
+- **New output schema** with replay links and yaw_diff
+- **Lane-only detection** for higher accuracy
+- **18+ case studies** documented with visualizations
 
 ### Commit History:
 ```
+Dec 27 - (pending)
+"Update documentation with recent changes"
+
+Dec 26, 05:30 UTC - 33747f9
+"Thresholds updated, new conflicts, Updated output schema"
+
+Dec 25, 15:28 UTC - 9e23c86
+"Refactor and Update: Fully working code with SPF and MDRAC"
+
 Dec 23, 09:08 UTC - 08f4409
 "Refactor code structure for improved readability and maintainability"
-
-Changes:
-- ssm/m_drac.py: Cleanup and documentation
-- ssm/utils.py: Modular architecture
-- ssm/spf.py: Remove redundancy, rename functions
-- config.yaml: Add SPF section
-- docs/: Update README, week2, week3
 ```
 
 ### Impact:
 - ✅ Codebase more maintainable
-- ✅ Easier to extend with new features
+- ✅ 2x faster processing time
+- ✅ Cleaner output for analysis
 - ✅ Better for collaboration
 - ✅ Publication-ready quality
 - ✅ Technical debt reduced by 80%
+- ✅ Automated replay link generation
+
+### Next Steps:
+- 🎯 **Temporal Deduplication** - Reduce duplicate events (expected 70-90% reduction)
+- 🎯 **False Positive Filtering** - Physics-based post-processing
+- 🎯 **Threshold Calibration** - Optimize for intersection traffic
+- 🎯 **Advanced Analytics** - Clustering, risk scoring
 
 ---
 
 **Week 3 Status**: 🚧 **IN PROGRESS**  
-**Current Date**: December 23, 2025  
-**Days Active**: 1 of 7  
-**Next**: Integration testing and validation (Dec 24-25)
+**Current Date**: December 27, 2025  
+**Days Active**: 5 of 7  
+**Next**: Post-processing and deduplication (Dec 28-29)
