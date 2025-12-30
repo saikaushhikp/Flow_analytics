@@ -62,9 +62,10 @@ def calculate_temporal_metrics(
     traj1: pd.DataFrame,
     traj2: pd.DataFrame
 ) -> pd.DataFrame:
-    """Calculate time-varying metrics between two trajectories."""
-    # Merge on timestamp with tolerance
-    merged = pd.merge_asof(
+    """Calculate time-varying metrics between two trajectories.
+    """
+    # EXACT timestamp match
+    merged = pd.merge(
         traj1[['timestamp', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel']].rename(
             columns={'pos_x': 'x1', 'pos_y': 'y1', 'vel_x': 'vx1', 'vel_y': 'vy1', 'vel': 'v1'}
         ),
@@ -72,21 +73,20 @@ def calculate_temporal_metrics(
             columns={'pos_x': 'x2', 'pos_y': 'y2', 'vel_x': 'vx2', 'vel_y': 'vy2', 'vel': 'v2'}
         ),
         on='timestamp',
-        direction='nearest',
-        tolerance=pd.Timedelta(seconds=0.5)
+        how='inner'
     )
     
-    # Calculate distance
+    # Calculate distance - same as utils.py line 249-260
     dx = merged['x2'] - merged['x1']
     dy = merged['y2'] - merged['y1']
     merged['distance'] = np.sqrt(dx**2 + dy**2)
     
-    # Calculate closing speed
+    # Calculate closing speed - same as utils.py line 154-160
     dvx = merged['vx2'] - merged['vx1']
     dvy = merged['vy2'] - merged['vy1']
     dot_product = dvx * dx + dvy * dy
     merged['closing_speed'] = np.where(
-        merged['distance'] > 0.1,
+        merged['distance'] > 0.01,  # Changed from 0.1 to 0.01 to match utils.py line 156
         -dot_product / merged['distance'],
         0.0
     )
@@ -130,13 +130,12 @@ def plot_trajectories(
     ax.scatter(traj2['pos_x'].iloc[-1], traj2['pos_y'].iloc[-1], 
                c=color2, s=150, marker='s', edgecolor='white', linewidth=2.5, zorder=5)
     
-    # Find minimum distance point
-    merged = pd.merge_asof(
+    # Find minimum distance point - EXACT timestamp match like utils.py
+    merged = pd.merge(
         traj1[['timestamp', 'pos_x', 'pos_y']].rename(columns={'pos_x': 'x1', 'pos_y': 'y1'}),
         traj2[['timestamp', 'pos_x', 'pos_y']].rename(columns={'pos_x': 'x2', 'pos_y': 'y2'}),
         on='timestamp',
-        direction='nearest',
-        tolerance=pd.Timedelta(seconds=0.5)
+        how='inner'
     )
     
     distances = np.sqrt((merged['x2'] - merged['x1'])**2 + (merged['y2'] - merged['y1'])**2)
@@ -463,10 +462,8 @@ if __name__ == "__main__":
     END_DATE = "2025-06-01"
     
     # Vehicle IDs to analyze
-    # 10538900_10539068 possibly a near miss
-    # 10504828_10505632 - opposite directions but a possible near miss
-    ID1 = 10936238
-    ID2 = 10936713
+    ID1 = 10639490
+    ID2 = 10639512
     
     # Load data
     df = load_data(DATA_DIR, START_DATE, END_DATE)
@@ -480,7 +477,7 @@ if __name__ == "__main__":
             df, 
             id1=ID1, 
             id2=ID2,
-            output_dir='results/plots',
+            output_dir='results/plots/spf',
             show_plot=False
         )
         print(f"✓ Done!")
