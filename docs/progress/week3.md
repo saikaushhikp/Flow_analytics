@@ -773,7 +773,43 @@ config.yaml: [Centralized]
 - ⏳ Threshold calibration analysis
 - ⏳ Advanced visualization features
 
-### Completed (Dec 23)::
+---
+
+### **Tuesday, December 31, 2025**
+**Work:** Threshold Analysis & Debug Investigation
+
+**Morning Session:**
+- ✅ Created `others/threshold_analysis.ipynb` for M-DRAC/SPF visualization
+- ✅ Added time-series plots for M-DRAC and SPF risk values
+- ✅ Implemented distance-based filtering (8m threshold) with gray shading
+- ✅ Fixed config reference issues in threshold analysis notebook
+
+**Afternoon Session:**
+- ✅ Created `others/debug_mdrac_missing.ipynb` for detection discrepancy investigation
+- ✅ Investigated pair (10718058, 10718064) in SPF but not M-DRAC
+- ✅ Root cause analysis completed:
+  - M-DRAC requires `speed_diff > 1.0 m/s` (follower faster than leader)
+  - Only 1 of 111 timestamps met this criteria
+  - At that timestamp, one vehicle was outside lane zone (zone gap issue)
+  - SPF detected at earlier timestamps when both were in E-L1 lane
+
+**Cleanup Session:**
+- ✅ Removed 3 plot folders not in mdrac_conflicts.csv:
+  - `10292655_10292540`
+  - `10538900_10539068`
+  - `10718058_10718064`
+- ✅ Updated README.md with current project structure
+- ✅ Updated progress documentation
+
+**Key Insights:**
+- M-DRAC is stricter than SPF (same-lane + follower-faster requirement)
+- Lane zone geometry has gaps at intersection approaches
+- SPF and M-DRAC can detect different timestamps for same vehicle pair
+- Pair correctly in SPF (trajectory intersection risk) but not M-DRAC (no tailgating scenario)
+
+---
+
+### Completed (Dec 23):
 
 **Dec 23:**
 1. ✅ **Code Refactoring** - M-DRAC, Utils, SPF modules
@@ -798,6 +834,12 @@ config.yaml: [Centralized]
 3. ✅ **Test Suite** - Validation framework
 4. ✅ **Documentation Update** - README, progress logs
 
+**Dec 31:**
+1. ✅ **Threshold Analysis Notebook** - M-DRAC/SPF time-series visualization
+2. ✅ **Debug Investigation** - M-DRAC vs SPF detection differences explained
+3. ✅ **Plot Folder Cleanup** - Removed 3 folders not in detection CSV
+4. ✅ **Documentation Update** - README and progress logs
+
 ### Key Achievements:
 - **-300 lines** of redundant code removed
 - **+280 lines** of documentation added
@@ -805,10 +847,14 @@ config.yaml: [Centralized]
 - **2.27x performance improvement** with optimized workflow
 - **New output schema** with replay links and yaw_diff
 - **Lane-only detection** for higher accuracy
-- **18+ case studies** documented with visualizations
+- **16 M-DRAC case studies** with visualizations (cleaned from 19)
+- **2 analysis notebooks** for threshold visualization and debugging
 
 ### Commit History:
 ```
+Dec 31 - (pending)
+"Threshold analysis, debug investigation, plot cleanup, documentation update"
+
 Dec 27 - (pending)
 "Update documentation with recent changes"
 
@@ -834,12 +880,12 @@ Dec 23, 09:08 UTC - 08f4409
 ### Next Steps:
 - 🎯 **Temporal Deduplication** - Reduce duplicate events (expected 70-90% reduction)
 - 🎯 **False Positive Filtering** - Physics-based post-processing
-- 🎯 **Threshold Calibration** - Optimize for intersection traffic
+- 🎯 **Lane Zone Geometry Fix** - Extend zones to cover intersection approaches
 - 🎯 **Advanced Analytics** - Clustering, risk scoring
 
 ---
 
-**Week 3 Status**: 🚧 **IN PROGRESS**  
-**Current Date**: December 27, 2025  
-**Days Active**: 5 of 7  
+**Week 3 Status**: ✅ **COMPLETED**  
+**Current Date**: December 31, 2025  
+**Days Active**: 7 of 7  
 **Next**: Post-processing and deduplication (Dec 28-29)

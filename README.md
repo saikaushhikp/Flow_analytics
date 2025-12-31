@@ -24,10 +24,15 @@ prem/
 │       ├── week1.md
 │       ├── week2.md
 │       └── week3.md
+├── others/                       # Analysis notebooks
+│   ├── threshold_analysis.ipynb # M-DRAC/SPF threshold visualization
+│   └── debug_mdrac_missing.ipynb # Detection debugging
 └── results/                      # Analysis outputs
-    ├── mdrac_conflicts.csv
-    └── plots/                   # Visualization outputs
-        └── {id1}_{id2}/         # Pair-specific folders
+    ├── mdrac_conflicts.csv       # M-DRAC detections (47 pairs)
+    ├── spf_conflicts.csv         # SPF detections (2351 rows)
+    └── plots/                    # Visualization outputs
+        ├── mdrac/               # M-DRAC pair plots (16 folders)
+        └── spf/                 # SPF pair plots
 ```
 
 ## Implemented Methods
@@ -318,12 +323,21 @@ plot_conflict_analysis(
 - SPF implementation
 - Trajectory visualization module
 
-### Week 3 (Dec 23-24)
+### Week 3 (Dec 23-29)
 - Code refactoring and modularization
 - Enhanced documentation
 - Configuration management
 - Function naming improvements
 - Plotter refactoring with velocity plot addition
+- Workflow optimization (2.27x speedup)
+- Lane-only detection for higher accuracy
+- Output schema redesign with replay links
+
+### Week 4 (Dec 30-31)
+- Threshold analysis notebook (`others/threshold_analysis.ipynb`)
+- Debug investigation for M-DRAC vs SPF detection differences
+- M-DRAC/SPF time-series visualization with distance filtering
+- Cleanup of plot folders (removed non-detected pairs)
 
 ## References
 
