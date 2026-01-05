@@ -29,6 +29,7 @@ import os
 # Add parent directory for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ssm.utils import get_mdrac_pairs, load_config
+from ssm.conflict_detection import detect_near_misses, aggregate_mdrac_per_pair
 
 
 class ModifiedDRAC:
@@ -67,14 +68,15 @@ class ModifiedDRAC:
         self.min_mdrac = config['mdrac']['min_mdrac']           # Minimum threshold for detection
         self.severity_thresholds = config['mdrac']['severity']  # Severity classification
     
-    def detect(self, data: pd.DataFrame, is_pairs_data: bool = False) -> pd.DataFrame:
+    def detect(self, data: pd.DataFrame, is_pairs_data: bool = False, 
+               use_multi_criteria: bool = True) -> pd.DataFrame:
         """
         Main detection pipeline for MDRAC conflicts.
         
         Pipeline:
             1. Get filtered pairs (same-lane, car-following) - SKIPPED if is_pairs_data=True
             2. Calculate MDRAC values
-            3. Filter by minimum threshold
+            3. Apply multi-criteria detection (rear-end: M-DRAC, head-on: yaw/decel)
             4. Classify severity
             5. Format output
         
@@ -83,6 +85,8 @@ class ModifiedDRAC:
                   OR pre-filtered pairs DataFrame (timestamp, id1, id2, pos_x1, vel_x1, ...)
             is_pairs_data: If True, data is already pairs (skip pair generation).
                           If False, data is vehicle data (default - backward compatible).
+            use_multi_criteria: If True, apply dual-criteria detection (rear-end + head-on).
+                               If False, use only M-DRAC threshold (backward compatible).
                 
         Returns:
             DataFrame with columns: timestamp, pair_id, zone, conflict_type, interaction,
@@ -105,8 +109,13 @@ class ModifiedDRAC:
         # Step 2: Calculate MDRAC
         pairs = self.calculate_mdrac(pairs)
         
-        # Step 3: Filter by minimum threshold
-        pairs = pairs[pairs['mdrac'] >= self.min_mdrac]
+        # Step 3: Apply detection logic
+        if use_multi_criteria and all(col in pairs.columns for col in ['yaw_diff', 'rel_yaw_rate', 'rel_deceleration']):
+            # Multi-criteria detection: rear-end (M-DRAC) + head-on (yaw/decel)
+            pairs, _ = detect_near_misses(pairs, mdrac=pairs['mdrac'].values)
+        else:
+            # Traditional: M-DRAC threshold only
+            pairs = pairs[pairs['mdrac'] >= self.min_mdrac]
         
         if len(pairs) == 0:
             return self._empty_output()
@@ -209,7 +218,7 @@ class ModifiedDRAC:
         Format final output with clean schema.
         
         Schema: timestamp, id1, id2, [label1]_v_[label2], leader, dist, TTC, MDRAC, 
-                closing_speed, speed_diff, yaw_diff, link
+                closing_speed, speed_diff, yaw_diff, conflict_type, link
         
         Args:
             pairs: DataFrame with all calculated values
@@ -253,9 +262,15 @@ class ModifiedDRAC:
             'MDRAC': pairs['mdrac'].values,
             'closing_speed': pairs['closing_speed'].values,
             'speed_diff': pairs['speed_diff'].values,
-            'yaw_diff': yaw_diff,
-            'link': links.values
+            'yaw_diff': yaw_diff
         })
+        
+        # Add conflict_type if available (from multi-criteria detection)
+        if 'conflict_type' in pairs.columns:
+            output['conflict_type'] = pairs['conflict_type'].values
+        
+        # Add link column at the end
+        output['link'] = links.values
         
         return output
     

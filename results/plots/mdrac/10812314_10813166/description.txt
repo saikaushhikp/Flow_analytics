@@ -1,4 +1,2 @@
-Yes
-Braking is there during the near miss detection
-Shall be a near miss!
-
+No
+Braking isn't there during the near miss detection

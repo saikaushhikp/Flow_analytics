@@ -1,5 +1,7 @@
+Yes but a head on collison!
+
 Bus moves to a different lane.
-Car is coming from the other lane in the same road.
+Car is coming from the opp. lane in the same road.
 they appear to be approaching.
 bus crosses the lane it shall be travelling in since it is too big.
 Hence the car decelerates to allow it to pass and align itself in the lane properly.

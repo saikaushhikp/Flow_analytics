@@ -18,11 +18,11 @@ heavy_vehicles: [4, 6, 7, 8]  # Car, van, truck, bus
 filters:
   vehicle_labels: [4, 6, 7, 8]
   min_vehicle_speed: 1.5        # m/s, filters stationary/parking vehicles
-  max_distance: 8.0            # m, maximum distance between vehicles to consider
+  max_distance: 8.0             # m, maximum distance between vehicles to consider
   max_lateral_distance: 2.0     # m, maximum perpendicular distance (same lane check)
-  max_ttc: 2.0                  # seconds, captures moderate to critical near-misses
-  min_closing_speed: 1.0        # m/s, filters slow-closing interactions
-  min_speed_diff: 1.0           # m/s, follower must be faster than leader
+  max_ttc: 2.5                  # seconds, captures moderate to critical near-misses
+  min_closing_speed: 0.7        # m/s, filters slow-closing interactions
+  min_speed_diff: 0.5           # m/s, follower must be faster than leader
 
 # M-DRAC (Modified Deceleration Rate to Avoid Crash) parameters
 mdrac:
@@ -45,6 +45,28 @@ mdrac:
     severe: 7.0      # Emergency braking
     moderate: 5.0    # Hard braking
     normal: 3.4      # Noticeable braking (below this = not a near-miss)
+
+# Multi-criteria conflict detection parameters
+conflict_detection:
+  # Rear-end conflicts use M-DRAC threshold
+  rear_end:
+    min_mdrac: 3.4           # m/s², minimum M-DRAC for rear-end near-miss
+    yaw_threshold: 90.0      # degrees, conflicts with yaw_diff < 90 are rear-end
+  
+  # Head-on and crossing conflicts use evasive action detection
+  head_on:
+    min_yaw_rate: 0.4        # rad/s, minimum relative yaw rate (steering evasion)
+    min_deceleration: 4.5    # m/s², minimum relative deceleration (braking evasion)
+    yaw_threshold: 90.0      # degrees, conflicts with yaw_diff >= 90 are head-on/crossing
+
+# Post-processing filters
+postprocessing:
+  # Duration filter - remove short conflicts (likely noise)
+  min_duration: 0.5          # seconds, minimum conflict duration
+  min_frames: 5              # frames (at 10Hz sampling), alternative to duration
+  
+  # Temporal aggregation for M-DRAC per pair
+  mdrac_aggregation: 'max'   # 'max', 'mean', or 'rolling' (use max per pair)
 
 # SPF (Safety Potential Field) parameters
 spf:

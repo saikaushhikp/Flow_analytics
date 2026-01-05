@@ -12,6 +12,7 @@ Functions:
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from typing import Tuple, Optional
 import warnings
 import os
@@ -91,10 +92,7 @@ def calculate_temporal_metrics(
         0.0
     )
     
-    # Convert timestamp to seconds from start
-    merged['time_sec'] = (merged['timestamp'] - merged['timestamp'].min()).dt.total_seconds()
-    
-    return merged[['timestamp', 'time_sec', 'distance', 'closing_speed', 'v1', 'v2']]
+    return merged[['timestamp', 'distance', 'closing_speed', 'v1', 'v2']]
 
 
 def plot_trajectories(
@@ -191,20 +189,25 @@ def plot_distance_over_time(
         fig, ax = plt.subplots(figsize=(10, 4))
     
     # Plot distance
-    ax.plot(metrics['time_sec'], metrics['distance'], 
+    ax.plot(metrics['timestamp'], metrics['distance'], 
             color='#27AE60', linewidth=2.5, zorder=3)
     
     # Highlight minimum distance
     min_dist = metrics['distance'].min()
-    min_time = metrics.loc[metrics['distance'].idxmin(), 'time_sec']
+    min_time = metrics.loc[metrics['distance'].idxmin(), 'timestamp']
     
     ax.axhline(y=min_dist, color='#E74C3C', linestyle='--', linewidth=2, 
                alpha=0.7, zorder=2, label=f'Min Distance: {min_dist:.2f}m')
     ax.scatter(min_time, min_dist, c='#E74C3C', s=150, 
                edgecolor='white', linewidth=2, zorder=5)
     
+    # Format x-axis as MM:SS
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%M:%S'))
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    plt.setp(ax.xaxis.get_majorticklabels(), rotation=0, ha='center')
+    
     # Set labels and styling
-    ax.set_xlabel('Time (seconds)', fontsize=13, fontweight='bold')
+    ax.set_xlabel('Time (MM:SS)', fontsize=13, fontweight='bold')
     ax.set_ylabel('Distance (m)', fontsize=13, fontweight='bold')
     ax.set_title('Distance Between Vehicles Over Time', 
                  fontsize=15, fontweight='bold', pad=15)
@@ -231,22 +234,27 @@ def plot_closing_speed_over_time(
         fig, ax = plt.subplots(figsize=(10, 4))
     
     # Plot closing speed
-    ax.plot(metrics['time_sec'], metrics['closing_speed'], 
+    ax.plot(metrics['timestamp'], metrics['closing_speed'], 
             color='#E67E22', linewidth=2.5, zorder=3)
     
     # Zero line
     ax.axhline(y=0, color='#2C3E50', linestyle='-', linewidth=2, alpha=0.8, zorder=2)
-    ax.fill_between(metrics['time_sec'], 0, metrics['closing_speed'], 
+    ax.fill_between(metrics['timestamp'], 0, metrics['closing_speed'], 
                      where=(metrics['closing_speed'] > 0), 
                      color='#E74C3C', alpha=0.15, zorder=1,
                      label='Approaching')
-    ax.fill_between(metrics['time_sec'], 0, metrics['closing_speed'], 
+    ax.fill_between(metrics['timestamp'], 0, metrics['closing_speed'], 
                      where=(metrics['closing_speed'] <= 0), 
                      color='#27AE60', alpha=0.15, zorder=1,
                      label='Separating')
     
+    # Format x-axis as MM:SS
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%M:%S'))
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    plt.setp(ax.xaxis.get_majorticklabels(), rotation=0, ha='center')
+    
     # Set labels and styling
-    ax.set_xlabel('Time (seconds)', fontsize=13, fontweight='bold')
+    ax.set_xlabel('Time (MM:SS)', fontsize=13, fontweight='bold')
     ax.set_ylabel('Closing Speed (m/s)', fontsize=13, fontweight='bold')
     ax.set_title('Relative Closing Speed Over Time', 
                  fontsize=15, fontweight='bold', pad=15)
@@ -285,13 +293,18 @@ def plot_velocity_over_time(
     color2 = '#3498DB'  # Blue
     
     # Plot velocities
-    ax.plot(metrics['time_sec'], metrics['v1'], 
+    ax.plot(metrics['timestamp'], metrics['v1'], 
             color=color1, linewidth=2.5, label=f'Vehicle {id1}', alpha=0.8, zorder=3)
-    ax.plot(metrics['time_sec'], metrics['v2'], 
+    ax.plot(metrics['timestamp'], metrics['v2'], 
             color=color2, linewidth=2.5, label=f'Vehicle {id2}', alpha=0.8, zorder=3)
     
+    # Format x-axis as MM:SS
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%M:%S'))
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    plt.setp(ax.xaxis.get_majorticklabels(), rotation=0, ha='center')
+    
     # Set labels and styling
-    ax.set_xlabel('Time (seconds)', fontsize=13, fontweight='bold')
+    ax.set_xlabel('Time (MM:SS)', fontsize=13, fontweight='bold')
     ax.set_ylabel('Velocity (m/s)', fontsize=13, fontweight='bold')
     ax.set_title('Velocity Comparison Over Time', 
                  fontsize=15, fontweight='bold', pad=15)
@@ -462,8 +475,8 @@ if __name__ == "__main__":
     END_DATE = "2025-06-01"
     
     # Vehicle IDs to analyze
-    ID1 = 10639490
-    ID2 = 10639512
+    ID1 = 10902226
+    ID2 = 10902246
     
     # Load data
     df = load_data(DATA_DIR, START_DATE, END_DATE)
@@ -477,8 +490,8 @@ if __name__ == "__main__":
             df, 
             id1=ID1, 
             id2=ID2,
-            output_dir='results/plots/spf',
-            show_plot=False
+            output_dir='results/plots/mdrac',
+            show_plot=True
         )
         print(f"✓ Done!")
     except Exception as e:
