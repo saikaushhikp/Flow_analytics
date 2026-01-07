@@ -88,7 +88,144 @@ def calibrate_threshold(df: pd.DataFrame, sampling_rate: float = SAMPLING_RATE, 
 
 
 # ============================================================================
-# MAIN FILTER FUNCTION
+# TIMESTAMP-LEVEL TELEPORTATION DETECTION (for post-processing)
+# ============================================================================
+
+def flag_teleportation_timestamps(
+    df: pd.DataFrame,
+    max_jump: float = MAX_JUMP_DISTANCE,
+    sampling_rate: float = SAMPLING_RATE,
+    verbose: bool = VERBOSE
+) -> pd.DataFrame:
+    """
+    Flag timestamps where vehicles have teleportation, WITHOUT removing vehicles.
+    Adds 'has_teleportation' boolean column to identify problematic moments.
+    
+    Use this in post-processing to filter conflicts at specific timestamps
+    rather than removing entire vehicles from the dataset.
+    
+    Args:
+        df: DataFrame with columns [id, timestamp, pos_x, pos_y]
+        max_jump: Maximum realistic distance between frames (meters)
+        sampling_rate: Data frequency in Hz
+        verbose: Print statistics
+        
+    Returns:
+        DataFrame with added 'has_teleportation' column
+    """
+    if verbose:
+        print(f"Flagging teleportation timestamps (threshold: {max_jump:.1f}m)...")
+    
+    # Sort by vehicle ID and timestamp
+    df_sorted = df.sort_values(['id', 'timestamp']).copy()
+    
+    # Calculate position jumps
+    df_sorted['pos_x_next'] = df_sorted.groupby('id')['pos_x'].shift(-1)
+    df_sorted['pos_y_next'] = df_sorted.groupby('id')['pos_y'].shift(-1)
+    df_sorted['jump_distance'] = np.sqrt(
+        (df_sorted['pos_x_next'] - df_sorted['pos_x'])**2 + 
+        (df_sorted['pos_y_next'] - df_sorted['pos_y'])**2
+    )
+    
+    # Flag timestamps with jumps > threshold
+    df_sorted['has_teleportation'] = df_sorted['jump_distance'] > max_jump
+    
+    # Also flag neighboring frames (before and after jump)
+    # This ensures we filter conflicts near the glitch
+    df_sorted['has_teleportation'] = df_sorted.groupby('id')['has_teleportation'].transform(
+        lambda x: x | x.shift(-1).fillna(False) | x.shift(1).fillna(False)
+    )
+    
+    # Drop helper columns
+    df_sorted = df_sorted.drop(columns=['pos_x_next', 'pos_y_next', 'jump_distance'])
+    
+    if verbose:
+        flagged_count = df_sorted['has_teleportation'].sum()
+        print(f"  Flagged {flagged_count:,} timestamps with teleportation ({100*flagged_count/len(df_sorted):.2f}%)")
+    
+    return df_sorted
+
+
+def filter_conflicts_by_teleportation(
+    conflicts: pd.DataFrame,
+    vehicle_data: pd.DataFrame,
+    max_jump: float = MAX_JUMP_DISTANCE,
+    sampling_rate: float = SAMPLING_RATE,
+    verbose: bool = VERBOSE
+) -> pd.DataFrame:
+    """
+    Filter conflicts that occur at timestamps with teleportation glitches.
+    
+    Removes conflicts where EITHER vehicle (id1 or id2) has unrealistic
+    position jumps at the conflict timestamp. This keeps real vehicles
+    in the dataset but filters detections at problematic moments.
+    
+    Args:
+        conflicts: DataFrame with columns [timestamp, id1, id2, ...]
+                   (can be mdrac_conflicts.csv or spf_conflicts.csv)
+        vehicle_data: Original vehicle DataFrame with [id, timestamp, pos_x, pos_y]
+        max_jump: Maximum realistic distance between frames (meters)
+        sampling_rate: Data frequency in Hz
+        verbose: Print filtering statistics
+        
+    Returns:
+        Filtered conflicts DataFrame (conflicts at clean timestamps only)
+    """
+    if verbose:
+        print("\n" + "="*70)
+        print("TELEPORTATION TIMESTAMP FILTER (Post-Processing)")
+        print("="*70)
+        print(f"Input conflicts: {len(conflicts):,}")
+        print(f"Max allowed jump: {max_jump:.1f} m ({max_jump * sampling_rate * 3.6:.1f} km/h @ {sampling_rate}Hz)")
+    
+    # Flag teleportation timestamps in vehicle data
+    vehicle_data_flagged = flag_teleportation_timestamps(
+        vehicle_data, max_jump, sampling_rate, verbose=False
+    )
+    
+    if verbose:
+        flagged_count = vehicle_data_flagged['has_teleportation'].sum()
+        print(f"\nFlagged timestamps in vehicle data: {flagged_count:,}")
+    
+    # Create lookup: (id, timestamp) -> has_teleportation
+    teleport_lookup = vehicle_data_flagged.set_index(['id', 'timestamp'])['has_teleportation'].to_dict()
+    
+    # Check each conflict
+    def has_teleportation_at_conflict(row):
+        """Check if either vehicle has teleportation at conflict timestamp"""
+        v1_key = (row['id1'], row['timestamp'])
+        v2_key = (row['id2'], row['timestamp'])
+        
+        v1_teleport = teleport_lookup.get(v1_key, False)
+        v2_teleport = teleport_lookup.get(v2_key, False)
+        
+        return v1_teleport or v2_teleport
+    
+    # Apply filter
+    conflicts_with_flag = conflicts.copy()
+    conflicts_with_flag['has_teleportation'] = conflicts_with_flag.apply(
+        has_teleportation_at_conflict, axis=1
+    )
+    
+    # Statistics
+    if verbose:
+        teleport_conflicts = conflicts_with_flag['has_teleportation'].sum()
+        print(f"\nConflicts at glitchy timestamps: {teleport_conflicts:,} ({100*teleport_conflicts/len(conflicts):.1f}%)")
+    
+    # Remove conflicts at problematic timestamps
+    conflicts_clean = conflicts_with_flag[~conflicts_with_flag['has_teleportation']].copy()
+    conflicts_clean = conflicts_clean.drop(columns=['has_teleportation'])
+    
+    if verbose:
+        print(f"Conflicts after filtering: {len(conflicts_clean):,}")
+        print(f"Removed: {len(conflicts) - len(conflicts_clean):,} conflicts")
+        print("="*70)
+    
+    return conflicts_clean
+
+
+# ============================================================================
+# MAIN FILTER FUNCTION (legacy - removes entire vehicles)
 # ============================================================================
 
 def filter_teleportation_events(

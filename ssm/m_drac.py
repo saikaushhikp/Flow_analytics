@@ -235,11 +235,11 @@ class ModifiedDRAC:
         yaw_diff = np.where(yaw_diff > np.pi, 2*np.pi - yaw_diff, yaw_diff)
         yaw_diff = np.degrees(yaw_diff)  # Convert to degrees
         
-        # Generate replay links
-        # Format: https://di-india-collab.flow-analytics.io/tools/replay/{date}T{time-10s}Z
+        # Generate replay links 
+        # Format: https://di-india-collab-2.flow-analytics.io/tools/replay/{date}T{time}Z
         timestamps = pd.to_datetime(pairs['timestamp'])
-        replay_times = timestamps - pd.Timedelta(seconds=10)
-        links = replay_times.apply(lambda t: f"https://di-india-collab.flow-analytics.io/tools/replay/{t.strftime('%Y-%m-%d')}T{t.strftime('%H:%M:%S')}Z")
+        replay_times = timestamps
+        links = replay_times.apply(lambda t: f"https://di-india-collab-2.flow-analytics.io/tools/replay/{t.strftime('%Y-%m-%d')}T{t.strftime('%H:%M:%S')}Z")
         
         # Build output DataFrame
         output = pd.DataFrame({

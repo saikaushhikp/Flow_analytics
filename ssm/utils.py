@@ -17,6 +17,7 @@ from shapely import wkt
 from shapely.geometry import Point
 import geopandas as gpd
 from tqdm import tqdm
+from filters.overlap_filter import filter_overlapping_pairs, OVERLAP_BUFFER
 
 # Numba for parallel processing
 try:
@@ -212,7 +213,8 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     print(f"  Processing {n_timestamps:,} timestamps (batch_size={timestamp_batch_size:,})")
     
     # Select only needed columns (reduces memory)
-    cols = ['timestamp', 'id', 'label', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel', 'yaw']
+    # Include size_x, size_y for overlap filter
+    cols = ['timestamp', 'id', 'label', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel', 'yaw', 'size_x', 'size_y']
     vehicles = vehicles[cols]
     
     # Stage 4: Process in timestamp batches (vectorized within each batch)
@@ -230,7 +232,7 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
         if len(batch_vehicles) < 2:
             continue
         
-        # ⚡ VECTORIZED SELF-JOIN: Generate all pairs for batch at once
+        # Generate all pairs for batch at once
         # This is the key optimization - no per-timestamp loops!
         pairs = pd.merge(
             batch_vehicles, 
@@ -245,7 +247,7 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
         if len(pairs) == 0:
             continue
         
-        # ⚡ VECTORIZED distance filter (early rejection)
+        # Distance filter (early rejection)
         dx = pairs['pos_x2'].values - pairs['pos_x1'].values
         dy = pairs['pos_y2'].values - pairs['pos_y1'].values
         dist_sq = dx*dx + dy*dy
@@ -274,7 +276,11 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     del all_pairs
     gc.collect()
     
-    print(f"  ✓ Generated {len(result):,} nearby pairs")
+    # Stage 6: Apply overlap filter (remove physically impossible pairs)
+    print(f"  Applying overlap filter (buffer={OVERLAP_BUFFER}m)...")
+    result = filter_overlapping_pairs(result, buffer=OVERLAP_BUFFER, verbose=False)
+    
+    print(f"  ✓ Generated {len(result):,} nearby pairs (after overlap filter)")
     return result
 
 
