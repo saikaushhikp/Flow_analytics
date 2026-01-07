@@ -169,6 +169,89 @@ def calculate_ttc(
     return ttc, distance, closing_speed
 
 
+def calculate_closing_accel(pairs: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate rate of change of closing speed (m/s²)
+    
+    Negative = gap closing slower (active response detected)
+    Positive = gap closing faster (accelerating toward conflict)
+    
+    Uses groupby differentiation with 3-frame smoothing to reduce noise
+    """
+    if len(pairs) == 0:
+        return pairs
+    
+    # Reset index to avoid index mismatch issues
+    pairs = pairs.reset_index(drop=True)
+    
+    # Sort by pair and timestamp
+    pairs = pairs.sort_values(['id1', 'id2', 'timestamp']).copy()
+    
+    # Group by pair
+    pair_groups = pairs.groupby(['id1', 'id2'], sort=False)
+    
+    # Calculate time delta between consecutive frames
+    pairs.loc[:, 'dt'] = pair_groups['timestamp'].diff().dt.total_seconds()
+    
+    # Calculate closing speed change
+    pairs.loc[:, 'd_closing_speed'] = pair_groups['closing_speed'].diff()
+    
+    # Raw closing acceleration
+    pairs.loc[:, 'closing_accel_raw'] = pairs['d_closing_speed'] / pairs['dt']
+    
+    # Smooth with 3-frame rolling average to reduce sensor noise
+    pairs.loc[:, 'closing_accel'] = pair_groups['closing_accel_raw'].rolling(
+        window=3, center=True, min_periods=1
+    ).mean().values
+    
+    # Clean up intermediate columns
+    pairs = pairs.drop(columns=['dt', 'd_closing_speed', 'closing_accel_raw'])
+    
+    return pairs
+
+
+def calculate_yaw_diff_rate(pairs: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate rate of change of yaw difference (degrees/second)
+    
+    High absolute values indicate sudden heading changes (evasive swerving)
+    Uses 3-frame smoothing to reduce noise
+    """
+    if len(pairs) == 0:
+        return pairs
+    
+    # Reset index to avoid mismatch
+    pairs = pairs.reset_index(drop=True)
+    pairs = pairs.sort_values(['id1', 'id2', 'timestamp']).copy()
+    
+    # Calculate yaw difference (absolute, normalized to [0, 180])
+    yaw_diff_rad = np.abs(pairs['yaw2'].values - pairs['yaw1'].values)
+    yaw_diff_rad = np.minimum(yaw_diff_rad, 2*np.pi - yaw_diff_rad)
+    pairs.loc[:, 'yaw_diff'] = np.degrees(yaw_diff_rad)
+    
+    # Group by pair
+    pair_groups = pairs.groupby(['id1', 'id2'], sort=False)
+    
+    # Time delta
+    pairs.loc[:, 'dt'] = pair_groups['timestamp'].diff().dt.total_seconds()
+    
+    # Yaw diff change
+    pairs.loc[:, 'd_yaw_diff'] = pair_groups['yaw_diff'].diff()
+    
+    # Yaw diff rate (degrees/second)
+    pairs.loc[:, 'yaw_diff_rate_raw'] = pairs['d_yaw_diff'] / pairs['dt']
+    
+    # Smooth with 3-frame rolling average
+    pairs.loc[:, 'yaw_diff_rate'] = pair_groups['yaw_diff_rate_raw'].rolling(
+        window=3, center=True, min_periods=1
+    ).mean().values
+    
+    # Cleanup intermediate columns
+    pairs = pairs.drop(columns=['dt', 'd_yaw_diff', 'yaw_diff_rate_raw'])
+    
+    return pairs
+
+
 # =============================================================================
 # VECTORIZED PAIR GENERATION (No per-timestamp loops!)
 # =============================================================================
@@ -287,7 +370,7 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 def filter_approaching(pairs: pd.DataFrame) -> pd.DataFrame:
     """
     Keep pairs where gap is closing: (v2 - v1) · (p2 - p1) < 0
-    Adds: closing_speed, ttc
+    Adds: closing_speed, ttc, closing_accel
     """
     if len(pairs) == 0:
         return pairs
@@ -315,6 +398,12 @@ def filter_approaching(pairs: pd.DataFrame) -> pd.DataFrame:
     
     pairs['ttc'] = ttc
     pairs['closing_speed'] = closing_speed
+    
+    # Calculate closing acceleration (rate of change of closing speed)
+    pairs = calculate_closing_accel(pairs)
+    
+    # Calculate yaw diff rate (rate of change of heading difference)
+    pairs = calculate_yaw_diff_rate(pairs)
     
     print(f" Approaching pairs: {len(pairs):,}")
     return pairs

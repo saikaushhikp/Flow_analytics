@@ -45,6 +45,18 @@ mdrac:
     severe: 7.0      # Emergency braking
     moderate: 5.0    # Hard braking
     normal: 3.4      # Noticeable braking (below this = not a near-miss)
+  
+  # Adaptive detection parameters
+  closing_accel_threshold: -0.2  # m/s², negative = gap closing slower (active response)
+  min_time_buffer: 0.1           # seconds, minimum time_available to cap MDRAC (avoid infinity)
+  
+  # Temporal averaging parameters
+  avg_window: 1.0                # seconds, rolling average window
+  min_avg_frames: 3              # minimum consecutive frames for sustained detection
+  
+  # Yaw-based detection (non-longitudinal conflicts)
+  yaw_diff_rate_threshold: 15.0  # degrees/second, sudden heading change threshold
+  longitudinal_yaw_threshold: 30.0  # degrees, yaw_diff below = longitudinal conflict
 
 # SPF (Safety Potential Field) parameters
 spf:
