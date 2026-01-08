@@ -29,7 +29,7 @@ except ImportError:
 
 # Safety buffer for sensor noise tolerance (meters)
 # Allows small overlaps due to measurement uncertainty
-OVERLAP_BUFFER = 0.1
+OVERLAP_BUFFER = 0.5
 
 # Enable detailed statistics output
 VERBOSE = True
@@ -57,7 +57,7 @@ if NUMBA_AVAILABLE:
         Args:
             pos_x1, pos_y1: Vehicle 1 positions
             yaw1: Vehicle 1 heading angles (radians)
-            size_x1, size_y1: Vehicle 1 dimensions (width × length)
+            size_x1, size_y1: Vehicle 1 dimensions (length × width for cars/trucks)
             pos_x2, pos_y2: Vehicle 2 positions
             yaw2: Vehicle 2 heading angles
             size_x2, size_y2: Vehicle 2 dimensions
@@ -91,8 +91,9 @@ if NUMBA_AVAILABLE:
             proj_lat2 = abs(-dx * sin2 + dy * cos2)
             
             # Minimum separation required (half-extents with buffer)
-            min_long = (size_y1[i] + size_y2[i]) / 2 - buffer
-            min_lat = (size_x1[i] + size_x2[i]) / 2 - buffer
+            # For cars/trucks: size_x = length, size_y = width
+            min_long = (size_x1[i] + size_x2[i]) / 2 - buffer
+            min_lat = (size_y1[i] + size_y2[i]) / 2 - buffer
             
             # Check if separated on any axis
             separated = (proj_long1 > min_long) or (proj_lat1 > min_lat) or \

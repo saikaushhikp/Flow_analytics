@@ -257,13 +257,21 @@ def calculate_yaw_diff_rate(pairs: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 
 def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
-    """
-    ⚡ FULLY VECTORIZED pair generation - NO per-timestamp Python loops!
-    
-    Uses vectorized groupby + merge operations to generate all pairs at once.
-    Much faster than iterating through each timestamp individually.
-    
-    Performance: ~100x faster than the loop-based approach.
+    """    
+    Find all pairs of vehicles within a certain distance at each timestamp.
+
+    Applies the following filters:
+    - Vehicle type: Only includes labels specified in config.
+    - Minimum speed: Removes stationary or slow-moving vehicles.
+    - Maximum distance: Only includes pairs within the specified spatial range.
+    - Unique pairs: Removes self-pairs and ensures each pair is only counted once (id1 < id2).
+
+    Args:
+        df: Vehicle DataFrame
+        config: Configuration dictionary containing filter parameters
+
+    Returns:
+        DataFrame of vehicle pairs with combined attributes
     """
     filter_config = config['filters']
     vehicle_labels = filter_config['vehicle_labels']

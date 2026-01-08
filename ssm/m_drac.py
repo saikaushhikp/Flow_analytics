@@ -192,11 +192,16 @@ class ModifiedDRAC:
     
     def apply_dual_metric_filter(self, pairs: pd.DataFrame) -> pd.DataFrame:
         """
-        Dual-metric detection: MDRAC only for longitudinal, MDRAC OR yaw_diff_rate for non-longitudinal
+        Dual-metric detection: MDRAC only for longitudinal, MDRAC AND yaw_diff_rate for non-longitudinal
         
         Splits pairs by yaw_diff threshold:
-        - yaw_diff <= 30°: Use MDRAC only (already filtered)
-        - yaw_diff > 30°: Keep if MDRAC >= 3.4 OR |yaw_diff_rate| >= threshold
+        - yaw_diff <= 30°: Use MDRAC only (classic car-following)
+        - yaw_diff > 30°: Require BOTH MDRAC >= 3.4 AND |yaw_diff_rate| >= threshold
+        
+        Rationale for AND logic:
+        - MDRAC ensures proximity is critical (close distance, high closing speed)
+        - Yaw rate confirms driver perceived danger and took evasive action
+        - Together they validate truly critical non-longitudinal interactions
         """
         if len(pairs) == 0:
             return pairs
@@ -204,27 +209,24 @@ class ModifiedDRAC:
         # Split by conflict type based on yaw difference
         is_longitudinal = pairs['yaw_diff'] <= self.longitudinal_yaw_threshold
         
-        # Part 1: Longitudinal conflicts (already filtered by MDRAC in Step 3)
+        # Part 1: Longitudinal conflicts (MDRAC only - already filtered in Step 3)
         longitudinal = pairs[is_longitudinal].copy()
         longitudinal['detection_method'] = 'mdrac'
         
-        # Part 2: Non-longitudinal conflicts (check yaw_diff_rate as well)
+        # Part 2: Non-longitudinal conflicts (require BOTH MDRAC AND yaw_rate)
         non_longitudinal = pairs[~is_longitudinal].copy()
         
         if len(non_longitudinal) > 0:
-            # Keep if high yaw diff rate (absolute value - direction doesn't matter)
+            # AND logic: Must have both high MDRAC AND high yaw rate
+            mdrac_mask = non_longitudinal['mdrac'] >= self.min_mdrac
             yaw_rate_mask = np.abs(non_longitudinal['yaw_diff_rate']) >= self.yaw_diff_rate_threshold
-            yaw_detections = non_longitudinal[yaw_rate_mask].copy()
             
-            # Mark detection method
-            yaw_detections['detection_method'] = np.where(
-                yaw_detections['mdrac'] >= self.min_mdrac,
-                'mdrac',
-                'yaw_rate'
-            )
+            # Keep only pairs that satisfy BOTH conditions
+            and_detections = non_longitudinal[mdrac_mask & yaw_rate_mask].copy()
+            and_detections['detection_method'] = 'mdrac_and_yaw'
             
             # Combine both parts
-            result = pd.concat([longitudinal, yaw_detections], ignore_index=True)
+            result = pd.concat([longitudinal, and_detections], ignore_index=True)
         else:
             result = longitudinal
         
@@ -252,12 +254,13 @@ class ModifiedDRAC:
         for (id1, id2), group in pairs.groupby(['id1', 'id2']):
             group = group.sort_values('timestamp').copy()
             
-            if len(group) < self.min_avg_frames:
-                continue  # Need minimum frames for averaging
+            if len(group) < 4:
+                continue  # Require minimum 4 frames (0.4s) for sustained event
             
             # Calculate frame-based rolling average (simpler and more robust)
             # Use window size that approximates 1 second based on typical frame rate (~10 fps)
-            window_frames = max(self.min_avg_frames, 10)  # ~1 second at 10fps
+            # Adapt window to available frames for shorter sequences
+            window_frames = min(max(self.min_avg_frames, 10), len(group))  # Adaptive window
             
             group['avg_mdrac'] = group['mdrac'].rolling(
                 window=window_frames, 
@@ -271,9 +274,11 @@ class ModifiedDRAC:
             if len(sustained) == 0:
                 continue
             
-            # Take peak moment (highest instantaneous MDRAC)
-            peak_idx = sustained['mdrac'].idxmax()
+            # Take peak avg_mdrac moment (highest averaged MDRAC)
+            peak_idx = sustained['avg_mdrac'].idxmax()
             peak_row = sustained.loc[peak_idx].copy()
+            # Store avg_mdrac as the primary metric (not peak instantaneous)
+            peak_row['mdrac'] = peak_row['avg_mdrac']  # Replace instantaneous with average
             peak_row['num_frames'] = len(sustained)
             peak_row['duration'] = (group['timestamp'].max() - group['timestamp'].min()).total_seconds()
             
