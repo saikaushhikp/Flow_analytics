@@ -67,11 +67,11 @@ def calculate_temporal_metrics(
     """
     # EXACT timestamp match
     merged = pd.merge(
-        traj1[['timestamp', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel']].rename(
-            columns={'pos_x': 'x1', 'pos_y': 'y1', 'vel_x': 'vx1', 'vel_y': 'vy1', 'vel': 'v1'}
+        traj1[['timestamp', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel', 'yaw']].rename(
+            columns={'pos_x': 'x1', 'pos_y': 'y1', 'vel_x': 'vx1', 'vel_y': 'vy1', 'vel': 'v1', 'yaw': 'yaw1'}
         ),
-        traj2[['timestamp', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel']].rename(
-            columns={'pos_x': 'x2', 'pos_y': 'y2', 'vel_x': 'vx2', 'vel_y': 'vy2', 'vel': 'v2'}
+        traj2[['timestamp', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel', 'yaw']].rename(
+            columns={'pos_x': 'x2', 'pos_y': 'y2', 'vel_x': 'vx2', 'vel_y': 'vy2', 'vel': 'v2', 'yaw': 'yaw2'}
         ),
         on='timestamp',
         how='inner'
@@ -92,7 +92,13 @@ def calculate_temporal_metrics(
         0.0
     )
     
-    return merged[['timestamp', 'distance', 'closing_speed', 'v1', 'v2']]
+    # Calculate yaw difference - same as utils.py
+    yaw_diff = np.abs(merged['yaw1'] - merged['yaw2'])
+    # Take the smaller angle (handle wrapping around 2π)
+    yaw_diff = np.minimum(yaw_diff, 2*np.pi - yaw_diff)
+    merged['yaw_diff'] = np.degrees(yaw_diff)  # Convert to degrees
+    
+    return merged[['timestamp', 'distance', 'closing_speed', 'v1', 'v2', 'yaw_diff']]
 
 
 def plot_trajectories(
@@ -323,6 +329,59 @@ def plot_velocity_over_time(
 
 
 
+def plot_yaw_diff_over_time(
+    metrics: pd.DataFrame,
+    ax: Optional[plt.Axes] = None
+) -> plt.Axes:
+    """Plot yaw difference (heading angle difference) between vehicles over time."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 4))
+    
+    # Plot yaw difference
+    ax.plot(metrics['timestamp'], metrics['yaw_diff'], 
+            color='#9B59B6', linewidth=2.5, zorder=3, label='Yaw Difference')
+    
+    # Add 30-degree threshold line (longitudinal vs non-longitudinal)
+    ax.axhline(y=30, color='#E74C3C', linestyle='--', linewidth=2, 
+               alpha=0.7, zorder=2, label='Longitudinal Threshold (30°)')
+    
+    # Fill regions
+    ax.fill_between(metrics['timestamp'], 0, metrics['yaw_diff'], 
+                     where=(metrics['yaw_diff'] <= 30), 
+                     color='#27AE60', alpha=0.15, zorder=1,
+                     label='Longitudinal (≤30°)')
+    ax.fill_between(metrics['timestamp'], 30, metrics['yaw_diff'], 
+                     where=(metrics['yaw_diff'] > 30), 
+                     color='#E67E22', alpha=0.15, zorder=1,
+                     label='Non-longitudinal (>30°)')
+    
+    # Format x-axis as MM:SS
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%M:%S'))
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    plt.setp(ax.xaxis.get_majorticklabels(), rotation=0, ha='center')
+    
+    # Set labels and styling
+    ax.set_xlabel('Time (MM:SS)', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Yaw Difference (degrees)', fontsize=13, fontweight='bold')
+    ax.set_title('Heading Angle Difference Over Time', 
+                 fontsize=15, fontweight='bold', pad=15)
+    
+    ax.legend(loc='best', fontsize=10, framealpha=0.95, 
+              edgecolor='gray', fancybox=True, shadow=True)
+    
+    ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.5)
+    ax.set_axisbelow(True)
+    ax.set_facecolor('#F8F9FA')
+    
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    # Set y-axis limits
+    ax.set_ylim(0, max(metrics['yaw_diff'].max() * 1.1, 35))
+    
+    return ax
+
+
 def plot_conflict_analysis(
     df: pd.DataFrame,
     id1: int,
@@ -334,11 +393,12 @@ def plot_conflict_analysis(
     """
     Generate complete conflict analysis visualization for a vehicle pair.
     
-    Creates 4 plots and saves them in a dedicated folder:
+    Creates 5 plots and saves them in a dedicated folder:
     - Trajectory plot (2D spatial)
     - Distance over time
     - Closing speed over time  
     - Velocity comparison over time
+    - Yaw difference over time
     
     Args:
         df: DataFrame with all object data
@@ -349,7 +409,7 @@ def plot_conflict_analysis(
         show_plot: Whether to display the plots
     
     Returns:
-        Tuple of (fig1, fig2, fig3, fig4) - matplotlib figure objects
+        Tuple of (fig1, fig2, fig3, fig4, fig5) - matplotlib figure objects
     """
     # Extract trajectories
     traj1, traj2 = extract_trajectories(df, id1, id2, time_window)
@@ -390,22 +450,32 @@ def plot_conflict_analysis(
                   fontsize=16, fontweight='bold', y=0.98)
     plt.tight_layout()
     
+    # Figure 5: Yaw difference over time
+    fig5, ax5 = plt.subplots(figsize=(12, 6))
+    plot_yaw_diff_over_time(metrics, ax=ax5)
+    fig5.suptitle(f'Yaw Difference Analysis: Vehicle {id1} vs Vehicle {id2}', 
+                  fontsize=16, fontweight='bold', y=0.98)
+    plt.tight_layout()
+    
     # Save all plots
     trajectory_file = os.path.join(save_dir, "trajectory.png")
     distance_file = os.path.join(save_dir, "distance.png")
     closing_file = os.path.join(save_dir, "closing_speed.png")
     velocity_file = os.path.join(save_dir, "velocity.png")
+    yaw_diff_file = os.path.join(save_dir, "yaw_diff.png")
     
     fig1.savefig(trajectory_file, dpi=150, bbox_inches='tight')
     fig2.savefig(distance_file, dpi=150, bbox_inches='tight')
     fig3.savefig(closing_file, dpi=150, bbox_inches='tight')
     fig4.savefig(velocity_file, dpi=150, bbox_inches='tight')
+    fig5.savefig(yaw_diff_file, dpi=150, bbox_inches='tight')
     
     print(f"\n✓ Saved plots to {save_dir}/")
     print(f"  - trajectory.png")
     print(f"  - distance.png")
     print(f"  - closing_speed.png")
     print(f"  - velocity.png")
+    print(f"  - yaw_diff.png")
     
     # Show plots
     if show_plot:
@@ -413,7 +483,9 @@ def plot_conflict_analysis(
     else:
         plt.close('all')
     
-    return fig1, fig2, fig3, fig4
+    return fig1, fig2, fig3, fig4, fig5
+
+
 
 
 # =============================================================================
@@ -475,8 +547,8 @@ if __name__ == "__main__":
     END_DATE = "2025-06-01"
     
     # Vehicle IDs to analyze
-    ID1 = 10902226
-    ID2 = 10902246
+    ID1 = 10540034
+    ID2 = 10540130
     
     # Load data
     df = load_data(DATA_DIR, START_DATE, END_DATE)
@@ -490,7 +562,7 @@ if __name__ == "__main__":
             df, 
             id1=ID1, 
             id2=ID2,
-            output_dir='results/plots/mdrac',
+            output_dir='results/plots/mdrac/02',
             show_plot=True
         )
         print(f"✓ Done!")

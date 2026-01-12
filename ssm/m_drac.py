@@ -29,7 +29,6 @@ import os
 # Add parent directory for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ssm.utils import get_mdrac_pairs, load_config
-from ssm.conflict_detection import detect_near_misses, aggregate_mdrac_per_pair
 
 
 class ModifiedDRAC:
@@ -67,16 +66,27 @@ class ModifiedDRAC:
         self.prt = config['mdrac']['prt']                       # Perception-Reaction Time by vehicle type
         self.min_mdrac = config['mdrac']['min_mdrac']           # Minimum threshold for detection
         self.severity_thresholds = config['mdrac']['severity']  # Severity classification
+        
+        # Adaptive detection parameters
+        self.accel_threshold = config['mdrac'].get('closing_accel_threshold', -0.5)
+        self.min_time_buffer = config['mdrac'].get('min_time_buffer', 0.2)
+        
+        # Temporal averaging parameters
+        self.avg_window = config['mdrac'].get('avg_window', 1.0)
+        self.min_avg_frames = config['mdrac'].get('min_avg_frames', 3)
+        
+        # Yaw-based detection parameters (non-longitudinal conflicts)
+        self.yaw_diff_rate_threshold = config['mdrac'].get('yaw_diff_rate_threshold', 15.0)
+        self.longitudinal_yaw_threshold = config['mdrac'].get('longitudinal_yaw_threshold', 30.0)
     
-    def detect(self, data: pd.DataFrame, is_pairs_data: bool = False, 
-               use_multi_criteria: bool = True) -> pd.DataFrame:
+    def detect(self, data: pd.DataFrame, is_pairs_data: bool = False) -> pd.DataFrame:
         """
         Main detection pipeline for MDRAC conflicts.
         
         Pipeline:
             1. Get filtered pairs (same-lane, car-following) - SKIPPED if is_pairs_data=True
             2. Calculate MDRAC values
-            3. Apply multi-criteria detection (rear-end: M-DRAC, head-on: yaw/decel)
+            3. Filter by minimum threshold
             4. Classify severity
             5. Format output
         
@@ -85,8 +95,6 @@ class ModifiedDRAC:
                   OR pre-filtered pairs DataFrame (timestamp, id1, id2, pos_x1, vel_x1, ...)
             is_pairs_data: If True, data is already pairs (skip pair generation).
                           If False, data is vehicle data (default - backward compatible).
-            use_multi_criteria: If True, apply dual-criteria detection (rear-end + head-on).
-                               If False, use only M-DRAC threshold (backward compatible).
                 
         Returns:
             DataFrame with columns: timestamp, pair_id, zone, conflict_type, interaction,
@@ -106,70 +114,180 @@ class ModifiedDRAC:
         if len(pairs) == 0:
             return self._empty_output()
         
-        # Step 2: Calculate MDRAC
+        # Step 2: Calculate MDRAC with adaptive PRT
         pairs = self.calculate_mdrac(pairs)
         
-        # Step 3: Apply detection logic
-        if use_multi_criteria and all(col in pairs.columns for col in ['yaw_diff', 'rel_yaw_rate', 'rel_deceleration']):
-            # Multi-criteria detection: rear-end (M-DRAC) + head-on (yaw/decel)
-            pairs, _ = detect_near_misses(pairs, mdrac=pairs['mdrac'].values)
-        else:
-            # Traditional: M-DRAC threshold only
-            pairs = pairs[pairs['mdrac'] >= self.min_mdrac]
+        # Step 3: Filter by minimum instantaneous threshold
+        pairs = pairs[pairs['mdrac'] >= self.min_mdrac]
         
         if len(pairs) == 0:
             return self._empty_output()
         
-        # Step 4: Classify severity
+        # Step 3.5: Apply dual-metric filter for non-longitudinal conflicts
+        pairs = self.apply_dual_metric_filter(pairs)
+        
+        if len(pairs) == 0:
+            return self._empty_output()
+        
+        # Step 4: Temporal averaging (1-second windows)
+        pairs = self.calculate_avg_mdrac(pairs)
+        
+        if len(pairs) == 0:
+            return self._empty_output()
+        
+        # Step 5: Classify severity
         pairs = self.classify_severity(pairs)
         
-        # Step 5: Format output
+        # Step 6: Format output
         return self.format_output(pairs)
     
     def calculate_mdrac(self, pairs: pd.DataFrame) -> pd.DataFrame:
         """
-        Calculate MDRAC for each pair.
-        
-        Uses follower's Perception-Reaction Time for calculation.
+        Calculate MDRAC with adaptive PRT based on closing acceleration.
         
         Formula:
-            MDRAC = closing_speed / [2 × (TTC - PRT)]
+            If actively responding: MDRAC = closing_speed / (2 * TTC)
+            If not responding: MDRAC = closing_speed / [2 × (TTC - PRT)]
         
-        Special cases:
-            - TTC ≤ PRT: MDRAC = ∞ (critical, no reaction time)
-            - TTC > PRT: Normal calculation
-                
+        Where active response = closing_accel < threshold (gap closing slower)
+        
         Args:
-            pairs: DataFrame with leader/follower identified
+            pairs: DataFrame with closing_accel, ttc, closing_speed
             
         Returns:
-            DataFrame with mdrac and prt_used columns
+            DataFrame with mdrac, prt_effective, is_responding columns
         """
-        # Get follower's label for each pair
+        # Get follower's label
         follower_label = np.where(
             pairs['is_veh1_follower'],
             pairs['label1'],
             pairs['label2']
         )
         
-        # Lookup PRT for follower's vehicle type
-        prt_values = np.array([self.prt.get(label, 1.0) for label in follower_label])
+        # Lookup base PRT for follower's vehicle type
+        prt_base = np.array([self.prt.get(label, 1.0) for label in follower_label])
+        
+        # Detect active response (closing_accel < 0 means gap closing slower)
+        is_responding = pairs['closing_accel'].fillna(0).values < self.accel_threshold
+        
+        # Adaptive PRT: 0 if responding, normal otherwise
+        prt_effective = np.where(is_responding, 0.0, prt_base)
         
         # Time available for reaction
-        time_available = pairs['ttc'].values - prt_values
+        time_available = pairs['ttc'].values - prt_effective
         
-        # MDRAC formula
+        # MDRAC formula with capping (avoid infinity)
         mdrac = np.where(
-            time_available > 0,
+            time_available > self.min_time_buffer,
             pairs['closing_speed'].values / (2 * time_available),
-            np.inf  # Critical: no time to react
+            pairs['closing_speed'].values / (2 * self.min_time_buffer)
         )
         
         pairs = pairs.copy()
         pairs['mdrac'] = mdrac
-        pairs['prt_used'] = prt_values
+        pairs['prt_effective'] = prt_effective
+        pairs['is_responding'] = is_responding
         
         return pairs
+    
+    def apply_dual_metric_filter(self, pairs: pd.DataFrame) -> pd.DataFrame:
+        """
+        Dual-metric detection: MDRAC only for longitudinal, MDRAC AND yaw_diff_rate for non-longitudinal
+        
+        Splits pairs by yaw_diff threshold:
+        - yaw_diff <= 30°: Use MDRAC only (classic car-following)
+        - yaw_diff > 30°: Require BOTH MDRAC >= 3.4 AND |yaw_diff_rate| >= threshold
+        
+        Rationale for AND logic:
+        - MDRAC ensures proximity is critical (close distance, high closing speed)
+        - Yaw rate confirms driver perceived danger and took evasive action
+        - Together they validate truly critical non-longitudinal interactions
+        """
+        if len(pairs) == 0:
+            return pairs
+        
+        # Split by conflict type based on yaw difference
+        is_longitudinal = pairs['yaw_diff'] <= self.longitudinal_yaw_threshold
+        
+        # Part 1: Longitudinal conflicts (MDRAC only - already filtered in Step 3)
+        longitudinal = pairs[is_longitudinal].copy()
+        longitudinal['detection_method'] = 'mdrac'
+        
+        # Part 2: Non-longitudinal conflicts (require BOTH MDRAC AND yaw_rate)
+        non_longitudinal = pairs[~is_longitudinal].copy()
+        
+        if len(non_longitudinal) > 0:
+            # AND logic: Must have both high MDRAC AND high yaw rate
+            mdrac_mask = non_longitudinal['mdrac'] >= self.min_mdrac
+            yaw_rate_mask = np.abs(non_longitudinal['yaw_diff_rate']) >= self.yaw_diff_rate_threshold
+            
+            # Keep only pairs that satisfy BOTH conditions
+            and_detections = non_longitudinal[mdrac_mask & yaw_rate_mask].copy()
+            and_detections['detection_method'] = 'mdrac_and_yaw'
+            
+            # Combine both parts
+            result = pd.concat([longitudinal, and_detections], ignore_index=True)
+        else:
+            result = longitudinal
+        
+        return result
+    
+    def calculate_avg_mdrac(self, pairs: pd.DataFrame) -> pd.DataFrame:
+        """
+        Average MDRAC over temporal windows, return peak moments.
+        
+        For each pair, computes rolling average over consecutive frames
+        and keeps only peak moments where avg_mdrac sustains above threshold.
+        
+        Args:
+            pairs: DataFrame with mdrac values per timestamp
+            
+        Returns:
+            DataFrame with one row per near-miss event (peak moment)
+        """
+        if len(pairs) == 0:
+            return pairs
+        
+        results = []
+        
+        # Group by pair
+        for (id1, id2), group in pairs.groupby(['id1', 'id2']):
+            group = group.sort_values('timestamp').copy()
+            
+            if len(group) < 4:
+                continue  # Require minimum 4 frames (0.4s) for sustained event
+            
+            # Calculate frame-based rolling average (simpler and more robust)
+            # Use window size that approximates 1 second based on typical frame rate (~10 fps)
+            # Adapt window to available frames for shorter sequences
+            window_frames = min(max(self.min_avg_frames, 10), len(group))  # Adaptive window
+            
+            group['avg_mdrac'] = group['mdrac'].rolling(
+                window=window_frames, 
+                min_periods=self.min_avg_frames,
+                center=True
+            ).mean()
+            
+            # Keep rows where average exceeds threshold
+            sustained = group[group['avg_mdrac'] >= self.min_mdrac]
+            
+            if len(sustained) == 0:
+                continue
+            
+            # Take peak avg_mdrac moment (highest averaged MDRAC)
+            peak_idx = sustained['avg_mdrac'].idxmax()
+            peak_row = sustained.loc[peak_idx].copy()
+            # Store avg_mdrac as the primary metric (not peak instantaneous)
+            peak_row['mdrac'] = peak_row['avg_mdrac']  # Replace instantaneous with average
+            peak_row['num_frames'] = len(sustained)
+            peak_row['duration'] = (group['timestamp'].max() - group['timestamp'].min()).total_seconds()
+            
+            results.append(peak_row)
+        
+        if len(results) == 0:
+            return pd.DataFrame()
+        
+        return pd.DataFrame(results)
     
     def classify_severity(self, pairs: pd.DataFrame) -> pd.DataFrame:
         """
@@ -218,7 +336,7 @@ class ModifiedDRAC:
         Format final output with clean schema.
         
         Schema: timestamp, id1, id2, [label1]_v_[label2], leader, dist, TTC, MDRAC, 
-                closing_speed, speed_diff, yaw_diff, conflict_type, link
+                closing_speed, speed_diff, yaw_diff, link
         
         Args:
             pairs: DataFrame with all calculated values
@@ -244,11 +362,11 @@ class ModifiedDRAC:
         yaw_diff = np.where(yaw_diff > np.pi, 2*np.pi - yaw_diff, yaw_diff)
         yaw_diff = np.degrees(yaw_diff)  # Convert to degrees
         
-        # Generate replay links
-        # Format: https://di-india-collab.flow-analytics.io/tools/replay/{date}T{time-10s}Z
+        # Generate replay links 
+        # Format: https://di-india-collab-2.flow-analytics.io/tools/replay/{date}T{time}Z
         timestamps = pd.to_datetime(pairs['timestamp'])
-        replay_times = timestamps - pd.Timedelta(seconds=10)
-        links = replay_times.apply(lambda t: f"https://di-india-collab.flow-analytics.io/tools/replay/{t.strftime('%Y-%m-%d')}T{t.strftime('%H:%M:%S')}Z")
+        replay_times = timestamps
+        links = replay_times.apply(lambda t: f"https://di-india-collab-2.flow-analytics.io/tools/replay/{t.strftime('%Y-%m-%d')}T{t.strftime('%H:%M:%S')}Z")
         
         # Build output DataFrame
         output = pd.DataFrame({
@@ -262,15 +380,9 @@ class ModifiedDRAC:
             'MDRAC': pairs['mdrac'].values,
             'closing_speed': pairs['closing_speed'].values,
             'speed_diff': pairs['speed_diff'].values,
-            'yaw_diff': yaw_diff
+            'yaw_diff': yaw_diff,
+            'link': links.values
         })
-        
-        # Add conflict_type if available (from multi-criteria detection)
-        if 'conflict_type' in pairs.columns:
-            output['conflict_type'] = pairs['conflict_type'].values
-        
-        # Add link column at the end
-        output['link'] = links.values
         
         return output
     

@@ -1,13 +1,14 @@
 """
 Overlap Filter (SAT Method)
 
-Removes vehicle pairs that are physically overlapping using Separating Axis Theorem.
-More accurate than circular approximation - accounts for vehicle orientation.
+Removes vehicle pairs that are physically overlapping.
 
-Method: SAT (Separating Axis Theorem)
+Uses Separating Axis Theorem (SAT):
 - Projects vehicles onto 4 axes (2 per vehicle: longitudinal + lateral)
 - If separated on ANY axis → no overlap
-- Uses actual yaw angles for accurate orientation-aware detection
+- Accounts for vehicle orientation (yaw angles)
+
+More accurate than circular approximation for oriented rectangles.
 """
 
 import pandas as pd
@@ -19,8 +20,24 @@ try:
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
-    print("Warning: Numba not available. Install with 'pip install numba' for 100x speedup.")
+    print("Warning: Numba not available for overlap filter. Install with 'pip install numba' for 100x speedup.")
 
+
+# ============================================================================
+# CONFIGURATION CONSTANTS
+# ============================================================================
+
+# Safety buffer for sensor noise tolerance (meters)
+# Allows small overlaps due to measurement uncertainty
+OVERLAP_BUFFER = 0.5
+
+# Enable detailed statistics output
+VERBOSE = True
+
+
+# ============================================================================
+# HELPER FUNCTIONS (Numba-accelerated SAT algorithm)
+# ============================================================================
 
 # Point-in-polygon algorithm with Numba acceleration
 if NUMBA_AVAILABLE:
@@ -40,7 +57,7 @@ if NUMBA_AVAILABLE:
         Args:
             pos_x1, pos_y1: Vehicle 1 positions
             yaw1: Vehicle 1 heading angles (radians)
-            size_x1, size_y1: Vehicle 1 dimensions (width × length)
+            size_x1, size_y1: Vehicle 1 dimensions (length × width for cars/trucks)
             pos_x2, pos_y2: Vehicle 2 positions
             yaw2: Vehicle 2 heading angles
             size_x2, size_y2: Vehicle 2 dimensions
@@ -74,8 +91,9 @@ if NUMBA_AVAILABLE:
             proj_lat2 = abs(-dx * sin2 + dy * cos2)
             
             # Minimum separation required (half-extents with buffer)
-            min_long = (size_y1[i] + size_y2[i]) / 2 - buffer
-            min_lat = (size_x1[i] + size_x2[i]) / 2 - buffer
+            # For cars/trucks: size_x = length, size_y = width
+            min_long = (size_x1[i] + size_x2[i]) / 2 - buffer
+            min_lat = (size_y1[i] + size_y2[i]) / 2 - buffer
             
             # Check if separated on any axis
             separated = (proj_long1 > min_long) or (proj_lat1 > min_lat) or \
@@ -87,10 +105,14 @@ if NUMBA_AVAILABLE:
         return result
 
 
+# ============================================================================
+# MAIN FILTER FUNCTION
+# ============================================================================
+
 def filter_overlapping_pairs(
     pairs: pd.DataFrame,
-    buffer: float = 0.1,
-    verbose: bool = True
+    buffer: float = OVERLAP_BUFFER,
+    verbose: bool = VERBOSE
 ) -> pd.DataFrame:
     """
     Remove physically overlapping vehicle pairs.
@@ -184,34 +206,3 @@ def filter_overlapping_pairs(
         print("="*70)
     
     return pairs_clean
-
-
-# Testing
-if __name__ == "__main__":
-    print("Testing Overlap Filter (SAT Method)...")
-    
-    # Create test pairs
-    test_pairs = pd.DataFrame({
-        # Pair 1: Two cars parallel, side-by-side (1m lateral gap - no overlap)
-        'pos_x1': [0.0, 0.0],
-        'pos_y1': [0.0, 0.0],
-        'yaw1': [0.0, 0.0],
-        'size_x1': [1.9, 1.9],
-        'size_y1': [4.5, 4.5],
-        
-        'pos_x2': [0.0, 2.5],
-        'pos_y2': [2.5, 0.0],
-        'yaw2': [0.0, np.pi/2],  # Parallel, Perpendicular
-        'size_x2': [1.9, 1.9],
-        'size_y2': [4.5, 4.5],
-    })
-    
-    print(f"\nTest pairs: {len(test_pairs)}")
-    print("\nPair 1: Parallel, 2.5m lateral gap")
-    print("  Expected: Overlap (gap < 1.9m width)")
-    print("\nPair 2: Perpendicular, 2.5m apart")
-    print("  Expected: No overlap (safe clearance)")
-    
-    filtered = filter_overlapping_pairs(test_pairs, buffer=0.1, verbose=True)
-    
-    print(f"\n✓ Test complete: {len(filtered)} pairs remaining")

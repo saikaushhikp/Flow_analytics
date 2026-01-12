@@ -1,8 +1,13 @@
 """
 Ghost Vehicle Filter
 
-Removes vehicles that spawn/despawn inside the detection zone rather than 
-entering/exiting through boundaries (tracking errors, occlusions, ID switches).
+Removes vehicles that spawn or despawn inside the detection zone.
+
+A vehicle is a "ghost" if:
+- First position is inside zone (spawned ghost)
+- Last position is inside zone (despawned ghost)
+
+This filters out tracking errors, occlusions, and ID switches.
 """
 
 import pandas as pd
@@ -16,19 +21,32 @@ try:
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
-    print("Warning: Numba not available. Install with 'pip install numba' for 10x speedup.")
+    print("Warning: Numba not available for ghost filter. Install with 'pip install numba' for 10x speedup.")
 
+
+# ============================================================================
+# CONFIGURATION CONSTANTS
+# ============================================================================
 
 # Ghost detection zone (inner area, excluding boundaries)
+# Vehicles spawning/despawning inside this polygon are considered ghosts
+# Updated 2026-01-07: Refined polygon to avoid catching legitimate edge entries
 GHOST_ZONE_WKT = (
-    "POLYGON ((-32.631 37.697, -18.294 50.062, 11.992 17.804, 20.595 15.833, "
-    "40.129 54.363, 48.552 49.883, 42.817 39.13, 43.354 35.905, 55.182 21.747, "
-    "74.179 28.378, 78.659 20.492, 36.186 3.288, 36.186 -1.909, 46.58 -12.841, "
-    "52.136 -23.594, 74 -49.4, 64.86 -55.493, 31.706 -19.472, 0.881 -11.586, "
-    "-34.065 -24.848, -36.215 -19.83, -0.552 -6.568, 3.032 -5.852, 0.881 0.242, "
-    "-32.631 37.697))"
+    "POLYGON ((-28.977 34.253, -12.788 47.989, 11.576 19.046, 19.752 15.448, "
+    "39.702 53.876, 48.205 49.788, 42.809 39.649, 43.136 36.215, 55.073 21.826, "
+    "71.915 27.549, 76.167 19.046, 36.104 3.675, 36.104 -2.376, 46.733 -13.168, "
+    "52.457 -24.287, 58.097 -31.792, 48.598 -39.498, 31.753 -19.785, 25.122 -23.907, "
+    "1.466 -11.721, -28.821 -22.652, -30.792 -17.276, 0.032 -5.986, -1.402 1.003, "
+    "-28.977 34.253))"
 )
 
+# Enable detailed statistics output
+VERBOSE = True
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
 # Point-in-polygon algorithm with Numba acceleration
 if NUMBA_AVAILABLE:
@@ -179,80 +197,3 @@ def filter_ghost_vehicles(df: pd.DataFrame, verbose: bool = True) -> pd.DataFram
         print("="*70)
     
     return df_clean
-
-
-def visualize_ghost_zone(save_path=None):
-    """
-    Visualize the ghost detection zone.
-    
-    Args:
-        save_path: If provided, saves figure to this path instead of displaying
-    """
-    try:
-        import matplotlib.pyplot as plt
-        from matplotlib.patches import Polygon as MPLPolygon
-        
-        ghost_zone = wkt.loads(GHOST_ZONE_WKT)
-        coords = list(ghost_zone.exterior.coords)
-        
-        fig, ax = plt.subplots(figsize=(12, 10))
-        polygon = MPLPolygon(coords, fill=True, alpha=0.3, color='red',
-                            edgecolor='darkred', linewidth=2)
-        ax.add_patch(polygon)
-        
-        # Plot zone boundary
-        x_coords, y_coords = zip(*coords)
-        ax.plot(x_coords, y_coords, 'r-', linewidth=2, label='Ghost Detection Zone')
-        
-        ax.set_xlabel('X Position (m)', fontsize=12)
-        ax.set_ylabel('Y Position (m)', fontsize=12)
-        ax.set_title('Ghost Vehicle Detection Zone (Inner Area)', fontsize=14, fontweight='bold')
-        ax.legend(fontsize=11)
-        ax.grid(True, alpha=0.3)
-        ax.axis('equal')
-        
-        plt.tight_layout()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Figure saved to: {save_path}")
-        else:
-            plt.show(block=True)  # block=True ensures plot stays open
-        
-        return fig
-        
-    except ImportError:
-        print("Matplotlib not available. Install with: pip install matplotlib")
-        return None
-
-
-# Testing
-if __name__ == "__main__":
-    # Test with dummy data
-    print("Testing Ghost Filter...")
-    
-    # Create test data with ghost vehicles
-    test_data = {
-        'id': [1, 1, 1, 2, 2, 2, 3, 3, 3],
-        'timestamp': [0, 1, 2, 0, 1, 2, 0, 1, 2],
-        'pos_x': [
-            -40, -35, -30,  # Vehicle 1: enters from outside (OK)
-            10, 15, 80,     # Vehicle 2: spawns inside, exits outside (GHOST)
-            20, 25, 30      # Vehicle 3: enters and exits inside (FULL GHOST)
-        ],
-        'pos_y': [
-            40, 35, 30,
-            20, 18, 25,
-            20, 18, 16
-        ]
-    }
-    
-    df_test = pd.DataFrame(test_data)
-    print(f"\nTest data: {len(df_test)} records, {df_test['id'].nunique()} vehicles")
-    
-    # Apply filter
-    df_filtered = filter_ghost_vehicles(df_test, verbose=True)
-    visualize_ghost_zone('ghost_zone')
-    print(f"\nExpected: Vehicle 1 kept, Vehicles 2 & 3 removed")
-    print(f"Actual: {df_filtered['id'].nunique()} vehicle(s) remaining")
-    print(f"Vehicle IDs kept: {sorted(df_filtered['id'].unique())}")

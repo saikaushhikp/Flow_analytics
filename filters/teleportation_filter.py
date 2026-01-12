@@ -1,8 +1,10 @@
 """
 Teleportation Filter
 
-Removes vehicles with unrealistic position jumps between consecutive frames
-(tracking errors, ID switches, sensor glitches). Uses vectorized pandas/numpy.
+Removes vehicles with unrealistic position jumps between consecutive frames.
+Identifies tracking errors, ID switches, and sensor glitches.
+
+Uses vectorized pandas/numpy operations for efficient processing.
 """
 
 import pandas as pd
@@ -10,7 +12,26 @@ import numpy as np
 from tqdm import tqdm
 
 
-def calibrate_threshold(df: pd.DataFrame, sampling_rate: float = 10.0, verbose: bool = True) -> float:
+# ============================================================================
+# CONFIGURATION CONSTANTS
+# ============================================================================
+
+# Maximum realistic distance a vehicle can travel between frames (meters)
+# Default: 3.5m = 126 km/h at 10Hz sampling rate (generous threshold)
+MAX_JUMP_DISTANCE = 3.5
+
+# Data sampling frequency (Hz)
+SAMPLING_RATE = 10.0
+
+# Enable detailed statistics output
+VERBOSE = True
+
+
+# ============================================================================
+# HELPER FUNCTIONS (for threshold calibration)
+# ============================================================================
+
+def calibrate_threshold(df: pd.DataFrame, sampling_rate: float = SAMPLING_RATE, verbose: bool = True) -> float:
     """
     Analyze jump distance distribution to recommend optimal threshold.
     
@@ -66,11 +87,152 @@ def calibrate_threshold(df: pd.DataFrame, sampling_rate: float = 10.0, verbose: 
     return recommended
 
 
+# ============================================================================
+# TIMESTAMP-LEVEL TELEPORTATION DETECTION (for post-processing)
+# ============================================================================
+
+def flag_teleportation_timestamps(
+    df: pd.DataFrame,
+    max_jump: float = MAX_JUMP_DISTANCE,
+    sampling_rate: float = SAMPLING_RATE,
+    verbose: bool = VERBOSE
+) -> pd.DataFrame:
+    """
+    Flag timestamps where vehicles have teleportation, WITHOUT removing vehicles.
+    Adds 'has_teleportation' boolean column to identify problematic moments.
+    
+    Use this in post-processing to filter conflicts at specific timestamps
+    rather than removing entire vehicles from the dataset.
+    
+    Args:
+        df: DataFrame with columns [id, timestamp, pos_x, pos_y]
+        max_jump: Maximum realistic distance between frames (meters)
+        sampling_rate: Data frequency in Hz
+        verbose: Print statistics
+        
+    Returns:
+        DataFrame with added 'has_teleportation' column
+    """
+    if verbose:
+        print(f"Flagging teleportation timestamps (threshold: {max_jump:.1f}m)...")
+    
+    # Sort by vehicle ID and timestamp
+    df_sorted = df.sort_values(['id', 'timestamp']).copy()
+    
+    # Calculate position jumps
+    df_sorted['pos_x_next'] = df_sorted.groupby('id')['pos_x'].shift(-1)
+    df_sorted['pos_y_next'] = df_sorted.groupby('id')['pos_y'].shift(-1)
+    df_sorted['jump_distance'] = np.sqrt(
+        (df_sorted['pos_x_next'] - df_sorted['pos_x'])**2 + 
+        (df_sorted['pos_y_next'] - df_sorted['pos_y'])**2
+    )
+    
+    # Flag timestamps with jumps > threshold
+    df_sorted['has_teleportation'] = df_sorted['jump_distance'] > max_jump
+    
+    # Also flag neighboring frames (before and after jump)
+    # This ensures we filter conflicts near the glitch
+    df_sorted['has_teleportation'] = df_sorted.groupby('id')['has_teleportation'].transform(
+        lambda x: x | x.shift(-1).fillna(False) | x.shift(1).fillna(False)
+    )
+    
+    # Drop helper columns
+    df_sorted = df_sorted.drop(columns=['pos_x_next', 'pos_y_next', 'jump_distance'])
+    
+    if verbose:
+        flagged_count = df_sorted['has_teleportation'].sum()
+        print(f"  Flagged {flagged_count:,} timestamps with teleportation ({100*flagged_count/len(df_sorted):.2f}%)")
+    
+    return df_sorted
+
+
+def filter_conflicts_by_teleportation(
+    conflicts: pd.DataFrame,
+    vehicle_data: pd.DataFrame,
+    max_jump: float = MAX_JUMP_DISTANCE,
+    sampling_rate: float = SAMPLING_RATE,
+    verbose: bool = VERBOSE
+) -> pd.DataFrame:
+    """
+    Filter conflicts that occur at timestamps with teleportation glitches.
+    
+    Removes conflicts where EITHER vehicle (id1 or id2) has unrealistic
+    position jumps at the conflict timestamp. This keeps real vehicles
+    in the dataset but filters detections at problematic moments.
+    
+    Args:
+        conflicts: DataFrame with columns [timestamp, id1, id2, ...]
+                   (can be mdrac_conflicts.csv or spf_conflicts.csv)
+        vehicle_data: Original vehicle DataFrame with [id, timestamp, pos_x, pos_y]
+        max_jump: Maximum realistic distance between frames (meters)
+        sampling_rate: Data frequency in Hz
+        verbose: Print filtering statistics
+        
+    Returns:
+        Filtered conflicts DataFrame (conflicts at clean timestamps only)
+    """
+    if verbose:
+        print("\n" + "="*70)
+        print("TELEPORTATION TIMESTAMP FILTER (Post-Processing)")
+        print("="*70)
+        print(f"Input conflicts: {len(conflicts):,}")
+        print(f"Max allowed jump: {max_jump:.1f} m ({max_jump * sampling_rate * 3.6:.1f} km/h @ {sampling_rate}Hz)")
+    
+    # Flag teleportation timestamps in vehicle data
+    vehicle_data_flagged = flag_teleportation_timestamps(
+        vehicle_data, max_jump, sampling_rate, verbose=False
+    )
+    
+    if verbose:
+        flagged_count = vehicle_data_flagged['has_teleportation'].sum()
+        print(f"\nFlagged timestamps in vehicle data: {flagged_count:,}")
+    
+    # Create lookup: (id, timestamp) -> has_teleportation
+    teleport_lookup = vehicle_data_flagged.set_index(['id', 'timestamp'])['has_teleportation'].to_dict()
+    
+    # Check each conflict
+    def has_teleportation_at_conflict(row):
+        """Check if either vehicle has teleportation at conflict timestamp"""
+        v1_key = (row['id1'], row['timestamp'])
+        v2_key = (row['id2'], row['timestamp'])
+        
+        v1_teleport = teleport_lookup.get(v1_key, False)
+        v2_teleport = teleport_lookup.get(v2_key, False)
+        
+        return v1_teleport or v2_teleport
+    
+    # Apply filter
+    conflicts_with_flag = conflicts.copy()
+    conflicts_with_flag['has_teleportation'] = conflicts_with_flag.apply(
+        has_teleportation_at_conflict, axis=1
+    )
+    
+    # Statistics
+    if verbose:
+        teleport_conflicts = conflicts_with_flag['has_teleportation'].sum()
+        print(f"\nConflicts at glitchy timestamps: {teleport_conflicts:,} ({100*teleport_conflicts/len(conflicts):.1f}%)")
+    
+    # Remove conflicts at problematic timestamps
+    conflicts_clean = conflicts_with_flag[~conflicts_with_flag['has_teleportation']].copy()
+    conflicts_clean = conflicts_clean.drop(columns=['has_teleportation'])
+    
+    if verbose:
+        print(f"Conflicts after filtering: {len(conflicts_clean):,}")
+        print(f"Removed: {len(conflicts) - len(conflicts_clean):,} conflicts")
+        print("="*70)
+    
+    return conflicts_clean
+
+
+# ============================================================================
+# MAIN FILTER FUNCTION (legacy - removes entire vehicles)
+# ============================================================================
+
 def filter_teleportation_events(
     df: pd.DataFrame, 
-    max_jump: float = 3.5,
-    sampling_rate: float = 10.0,
-    verbose: bool = True
+    max_jump: float = MAX_JUMP_DISTANCE,
+    sampling_rate: float = SAMPLING_RATE,
+    verbose: bool = VERBOSE
 ) -> pd.DataFrame:
     """
     Remove vehicles that exhibit teleportation (unrealistic position jumps).
@@ -157,85 +319,3 @@ def filter_teleportation_events(
         print("="*70)
     
     return df_clean
-
-
-def analyze_position_jumps(df: pd.DataFrame, max_jump: float = 5.0) -> pd.DataFrame:
-    """
-    Analyze position jump statistics without filtering.
-    Useful for calibrating the max_jump threshold.
-    
-    Args:
-        df: DataFrame with columns [id, timestamp, pos_x, pos_y]
-        max_jump: Threshold for flagging jumps
-        
-    Returns:
-        DataFrame with jump statistics per vehicle
-    """
-    df_sorted = df.sort_values(['id', 'timestamp']).copy()
-    
-    # Calculate jumps
-    df_sorted['prev_x'] = df_sorted.groupby('id')['pos_x'].shift(1)
-    df_sorted['prev_y'] = df_sorted.groupby('id')['pos_y'].shift(1)
-    dx = df_sorted['pos_x'] - df_sorted['prev_x']
-    dy = df_sorted['pos_y'] - df_sorted['prev_y']
-    df_sorted['jump_distance'] = np.sqrt(dx**2 + dy**2)
-    
-    # Statistics per vehicle
-    stats = df_sorted.groupby('id')['jump_distance'].agg([
-        ('max_jump', 'max'),
-        ('mean_jump', 'mean'),
-        ('median_jump', 'median'),
-        ('violations', lambda x: (x > max_jump).sum())
-    ]).reset_index()
-    
-    stats = stats.sort_values('max_jump', ascending=False)
-    
-    print(f"\n=== Position Jump Analysis ===")
-    print(f"Threshold: {max_jump:.1f} m")
-    print(f"\nOverall statistics:")
-    print(f"  Total vehicles: {len(stats)}")
-    print(f"  Vehicles with violations: {(stats['violations'] > 0).sum()}")
-    print(f"  Max jump observed: {stats['max_jump'].max():.1f} m")
-    print(f"  95th percentile: {stats['max_jump'].quantile(0.95):.1f} m")
-    print(f"  99th percentile: {stats['max_jump'].quantile(0.99):.1f} m")
-    
-    print(f"\nTop 10 vehicles by max jump:")
-    print(stats.head(10).to_string(index=False))
-    
-    return stats
-
-
-# Testing
-if __name__ == "__main__":
-    # Test with dummy data
-    print("Testing Teleportation Filter...")
-    
-    # Create test data with teleporting vehicle
-    test_data = {
-        'id': [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3],
-        'timestamp': [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2],
-        'pos_x': [
-            0, 1, 2, 3,      # Vehicle 1: smooth (OK)
-            0, 1, 10, 11,    # Vehicle 2: teleports at t=2 (BAD)
-            0, 1, 2          # Vehicle 3: smooth (OK)
-        ],
-        'pos_y': [
-            0, 0.5, 1, 1.5,
-            0, 0.5, 0.7, 1.2,
-            10, 10.5, 11
-        ]
-    }
-    
-    df_test = pd.DataFrame(test_data)
-    print(f"\nTest data: {len(df_test)} records, {df_test['id'].nunique()} vehicles")
-    
-    # Analyze jumps
-    print("\nAnalyzing jumps:")
-    stats = analyze_position_jumps(df_test, max_jump=5.0)
-    
-    # Apply filter
-    df_filtered = filter_teleportation_events(df_test, max_jump=3.5, verbose=True)
-    
-    print(f"\nExpected: Vehicles 1 & 3 kept, Vehicle 2 removed")
-    print(f"Actual: {df_filtered['id'].nunique()} vehicle(s) remaining")
-    print(f"Vehicle IDs kept: {sorted(df_filtered['id'].unique())}")

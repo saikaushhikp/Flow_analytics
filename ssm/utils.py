@@ -17,6 +17,7 @@ from shapely import wkt
 from shapely.geometry import Point
 import geopandas as gpd
 from tqdm import tqdm
+from filters.overlap_filter import filter_overlapping_pairs, OVERLAP_BUFFER
 
 # Numba for parallel processing
 try:
@@ -134,27 +135,11 @@ def calculate_ttc(
     pos1_x: np.ndarray, pos1_y: np.ndarray,
     pos2_x: np.ndarray, pos2_y: np.ndarray,
     vel1_x: np.ndarray, vel1_y: np.ndarray,
-    vel2_x: np.ndarray, vel2_y: np.ndarray,
-    acc1_x: np.ndarray = None, acc1_y: np.ndarray = None,
-    acc2_x: np.ndarray = None, acc2_y: np.ndarray = None
+    vel2_x: np.ndarray, vel2_y: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Calculate Time-to-Collision with optional acceleration consideration.
-    
-    Constant velocity (no acceleration provided):
-        TTC = distance / closing_speed
-    
-    With acceleration (realistic):
-        Uses kinematic equation: distance = v·t + 0.5·a·t²
-        Solving for t: TTC = (-v_closing + sqrt(v_closing² + 2·a_rel·distance)) / a_rel
-    
-    Args:
-        pos*_x, pos*_y: Position vectors
-        vel*_x, vel*_y: Velocity vectors
-        acc*_x, acc*_y: Acceleration vectors (optional, for realistic TTC)
-    
-    Returns:
-        (ttc, distance, closing_speed) tuple
+    TTC = d / v_closing where v_closing = -(Δv · Δr) / d
+    Returns (ttc, distance, closing_speed)
     """
     # Position difference vector
     dx = pos2_x - pos1_x
@@ -174,50 +159,97 @@ def calculate_ttc(
         0.0
     )
     
-    # Calculate TTC with or without acceleration
-    if acc1_x is not None and acc2_x is not None:
-        # Relative acceleration vector
-        dax = acc2_x - acc1_x
-        day = acc2_y - acc1_y
-        
-        # Project acceleration onto direction of motion
-        acc_dot_product = dax * dx + day * dy
-        a_relative = np.where(
-            distance > 0.01,
-            -acc_dot_product / distance,
-            0.0
-        )
-        
-        # Kinematic TTC (quadratic formula)
-        # 0 = 0.5·a·t² + v·t - d
-        # t = (-v + sqrt(v² + 2·a·d)) / a
-        discriminant = closing_speed**2 + 2 * a_relative * distance
-        
-        # Use acceleration-based TTC if acceleration is significant (> 0.1 m/s²)
-        ttc = np.where(
-            np.abs(a_relative) > 0.1,
-            # Acceleration case
-            np.where(
-                discriminant >= 0,
-                (-closing_speed + np.sqrt(discriminant)) / a_relative,
-                np.inf  # No collision in this trajectory
-            ),
-            # Constant velocity fallback
-            np.where(
-                closing_speed > 0.01,
-                distance / closing_speed,
-                np.inf
-            )
-        )
-    else:
-        # Constant velocity TTC (backward compatible)
-        ttc = np.where(
-            closing_speed > 0.01,
-            distance / closing_speed,
-            np.inf
-        )
+    # TTC: only meaningful when closing_speed > 0
+    ttc = np.where(
+        closing_speed > 0.01,
+        distance / closing_speed,
+        np.inf
+    )
     
     return ttc, distance, closing_speed
+
+
+def calculate_closing_accel(pairs: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate rate of change of closing speed (m/s²)
+    
+    Negative = gap closing slower (active response detected)
+    Positive = gap closing faster (accelerating toward conflict)
+    
+    Uses groupby differentiation with 3-frame smoothing to reduce noise
+    """
+    if len(pairs) == 0:
+        return pairs
+    
+    # Reset index to avoid index mismatch issues
+    pairs = pairs.reset_index(drop=True)
+    
+    # Sort by pair and timestamp
+    pairs = pairs.sort_values(['id1', 'id2', 'timestamp']).copy()
+    
+    # Group by pair
+    pair_groups = pairs.groupby(['id1', 'id2'], sort=False)
+    
+    # Calculate time delta between consecutive frames
+    pairs.loc[:, 'dt'] = pair_groups['timestamp'].diff().dt.total_seconds()
+    
+    # Calculate closing speed change
+    pairs.loc[:, 'd_closing_speed'] = pair_groups['closing_speed'].diff()
+    
+    # Raw closing acceleration
+    pairs.loc[:, 'closing_accel_raw'] = pairs['d_closing_speed'] / pairs['dt']
+    
+    # Smooth with 3-frame rolling average to reduce sensor noise
+    pairs.loc[:, 'closing_accel'] = pair_groups['closing_accel_raw'].rolling(
+        window=3, center=True, min_periods=1
+    ).mean().values
+    
+    # Clean up intermediate columns
+    pairs = pairs.drop(columns=['dt', 'd_closing_speed', 'closing_accel_raw'])
+    
+    return pairs
+
+
+def calculate_yaw_diff_rate(pairs: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate rate of change of yaw difference (degrees/second)
+    
+    High absolute values indicate sudden heading changes (evasive swerving)
+    Uses 3-frame smoothing to reduce noise
+    """
+    if len(pairs) == 0:
+        return pairs
+    
+    # Reset index to avoid mismatch
+    pairs = pairs.reset_index(drop=True)
+    pairs = pairs.sort_values(['id1', 'id2', 'timestamp']).copy()
+    
+    # Calculate yaw difference (absolute, normalized to [0, 180])
+    yaw_diff_rad = np.abs(pairs['yaw2'].values - pairs['yaw1'].values)
+    yaw_diff_rad = np.minimum(yaw_diff_rad, 2*np.pi - yaw_diff_rad)
+    pairs.loc[:, 'yaw_diff'] = np.degrees(yaw_diff_rad)
+    
+    # Group by pair
+    pair_groups = pairs.groupby(['id1', 'id2'], sort=False)
+    
+    # Time delta
+    pairs.loc[:, 'dt'] = pair_groups['timestamp'].diff().dt.total_seconds()
+    
+    # Yaw diff change
+    pairs.loc[:, 'd_yaw_diff'] = pair_groups['yaw_diff'].diff()
+    
+    # Yaw diff rate (degrees/second)
+    pairs.loc[:, 'yaw_diff_rate_raw'] = pairs['d_yaw_diff'] / pairs['dt']
+    
+    # Smooth with 3-frame rolling average
+    pairs.loc[:, 'yaw_diff_rate'] = pair_groups['yaw_diff_rate_raw'].rolling(
+        window=3, center=True, min_periods=1
+    ).mean().values
+    
+    # Cleanup intermediate columns
+    pairs = pairs.drop(columns=['dt', 'd_yaw_diff', 'yaw_diff_rate_raw'])
+    
+    return pairs
 
 
 # =============================================================================
@@ -226,7 +258,20 @@ def calculate_ttc(
 
 def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     """    
-    Uses vectorized groupby + merge operations to generate all pairs at once.    
+    Find all pairs of vehicles within a certain distance at each timestamp.
+
+    Applies the following filters:
+    - Vehicle type: Only includes labels specified in config.
+    - Minimum speed: Removes stationary or slow-moving vehicles.
+    - Maximum distance: Only includes pairs within the specified spatial range.
+    - Unique pairs: Removes self-pairs and ensures each pair is only counted once (id1 < id2).
+
+    Args:
+        df: Vehicle DataFrame
+        config: Configuration dictionary containing filter parameters
+
+    Returns:
+        DataFrame of vehicle pairs with combined attributes
     """
     filter_config = config['filters']
     vehicle_labels = filter_config['vehicle_labels']
@@ -243,7 +288,7 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
         print("  No vehicles of specified types found")
         return pd.DataFrame()
     
-    # Stage 2: Remove very slow vehicles
+    # Stage 2: Remove stationary vehicles
     vehicles = vehicles[vehicles['vel'] >= min_vehicle_speed]
     if len(vehicles) == 0:
         print("  No moving vehicles found")
@@ -259,6 +304,7 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     print(f"  Processing {n_timestamps:,} timestamps (batch_size={timestamp_batch_size:,})")
     
     # Select only needed columns (reduces memory)
+    # Include size_x, size_y for overlap filter
     cols = ['timestamp', 'id', 'label', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel', 'yaw', 'size_x', 'size_y']
     vehicles = vehicles[cols]
     
@@ -277,7 +323,7 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
         if len(batch_vehicles) < 2:
             continue
         
-        # ⚡ VECTORIZED SELF-JOIN: Generate all pairs for batch at once
+        # Generate all pairs for batch at once
         # This is the key optimization - no per-timestamp loops!
         pairs = pd.merge(
             batch_vehicles, 
@@ -292,7 +338,7 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
         if len(pairs) == 0:
             continue
         
-        # ⚡ VECTORIZED distance filter (early rejection)
+        # Distance filter (early rejection)
         dx = pairs['pos_x2'].values - pairs['pos_x1'].values
         dy = pairs['pos_y2'].values - pairs['pos_y1'].values
         dist_sq = dx*dx + dy*dy
@@ -321,93 +367,18 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     del all_pairs
     gc.collect()
     
-    print(f"  ✓ Generated {len(result):,} nearby pairs")
+    # Stage 6: Apply overlap filter (remove physically impossible pairs)
+    print(f"  Applying overlap filter (buffer={OVERLAP_BUFFER}m)...")
+    result = filter_overlapping_pairs(result, buffer=OVERLAP_BUFFER, verbose=False)
     
-    # Stage 6: Calculate acceleration (for realistic TTC)
-    print("  Calculating vehicle accelerations...")
-    
-    # Sort vehicles by id and timestamp
-    vehicles_sorted = vehicles.sort_values(['id', 'timestamp'])
-    
-    # Calculate acceleration using finite differences (10Hz = 0.1s)
-    vehicles_sorted['acc_x'] = vehicles_sorted.groupby('id')['vel_x'].diff() / 0.1
-    vehicles_sorted['acc_y'] = vehicles_sorted.groupby('id')['vel_y'].diff() / 0.1
-    
-    # Fill NaN (first frame per vehicle) with 0
-    vehicles_sorted['acc_x'] = vehicles_sorted['acc_x'].fillna(0)
-    vehicles_sorted['acc_y'] = vehicles_sorted['acc_y'].fillna(0)
-    
-    # Merge acceleration into pairs
-    acc_cols = ['timestamp', 'id', 'acc_x', 'acc_y']
-    result = result.merge(
-        vehicles_sorted[acc_cols].rename(columns={'id': 'id1', 'acc_x': 'acc_x1', 'acc_y': 'acc_y1'}),
-        on=['timestamp', 'id1'],
-        how='left'
-    )
-    result = result.merge(
-        vehicles_sorted[acc_cols].rename(columns={'id': 'id2', 'acc_x': 'acc_x2', 'acc_y': 'acc_y2'}),
-        on=['timestamp', 'id2'],
-        how='left'
-    )
-    
-    # Fill any remaining NaN with 0
-    result['acc_x1'] = result['acc_x1'].fillna(0)
-    result['acc_y1'] = result['acc_y1'].fillna(0)
-    result['acc_x2'] = result['acc_x2'].fillna(0)
-    result['acc_y2'] = result['acc_y2'].fillna(0)
-    
-    print(f"  ✓ Acceleration calculated")
-    
-    # Stage 6b: Calculate relative yaw rate and deceleration for conflict detection
-    print("  Calculating relative yaw rate and deceleration...")
-    
-    # Calculate yaw difference (handle wraparound at ±π)
-    # Note: yaw is stored in radians in the data
-    yaw_diff = result['yaw2'] - result['yaw1']
-    yaw_diff = np.arctan2(np.sin(yaw_diff), np.cos(yaw_diff))  # Normalize to [-π, π]
-    result['yaw_diff'] = np.abs(yaw_diff)
-    
-    # Sort by pairs and timestamp for time derivatives
-    result_sorted = result.sort_values(['id1', 'id2', 'timestamp'])
-    
-    # Relative yaw rate: d(yaw_diff)/dt (in rad/s)
-    result_sorted['rel_yaw_rate'] = result_sorted.groupby(['id1', 'id2'])['yaw_diff'].diff() / 0.1
-    result_sorted['rel_yaw_rate'] = result_sorted['rel_yaw_rate'].fillna(0).abs()
-    
-    # Relative deceleration projected onto collision path
-    dx = result_sorted['pos_x2'] - result_sorted['pos_x1']
-    dy = result_sorted['pos_y2'] - result_sorted['pos_y1']
-    dist = np.sqrt(dx*dx + dy*dy)
-    
-    # Relative acceleration in collision direction
-    dax = result_sorted['acc_x2'] - result_sorted['acc_x1']
-    day = result_sorted['acc_y2'] - result_sorted['acc_y1']
-    
-    # Project onto collision path (negative = decelerating toward collision)
-    rel_decel = np.where(dist > 0.1, -(dax * dx + day * dy) / dist, 0.0)
-    result_sorted['rel_deceleration'] = np.maximum(rel_decel, 0.0)  # Only positive (braking)
-    
-    result = result_sorted
-    
-    print(f"  ✓ Relative yaw rate and deceleration calculated")
-    
-    # Stage 7: Filter physically overlapping pairs (LAST - most expensive)
-    print("  Filtering overlapping pairs (SAT method)...")
-    
-    try:
-        from filters.overlap_filter import filter_overlapping_pairs
-        result = filter_overlapping_pairs(result, buffer=0.1, verbose=False)
-        print(f"  ✓ Overlap filter applied: {len(result):,} pairs remaining")
-    except ImportError:
-        print("  Warning: overlap_filter not available, skipping overlap check")
-    
+    print(f"  ✓ Generated {len(result):,} nearby pairs (after overlap filter)")
     return result
 
 
-def filter_approaching(pairs: pd.DataFrame, use_acceleration: bool = True) -> pd.DataFrame:
+def filter_approaching(pairs: pd.DataFrame) -> pd.DataFrame:
     """
     Keep pairs where gap is closing: (v2 - v1) · (p2 - p1) < 0
-    Adds: closing_speed, ttc (with optional acceleration-based calculation)
+    Adds: closing_speed, ttc, closing_accel
     """
     if len(pairs) == 0:
         return pairs
@@ -425,27 +396,22 @@ def filter_approaching(pairs: pd.DataFrame, use_acceleration: bool = True) -> pd
     if len(pairs) == 0:
         return pairs
     
-    # Calculate TTC with acceleration if available
-    if use_acceleration and 'acc_x1' in pairs.columns:
-        ttc, _, closing_speed = calculate_ttc(
-            pairs['pos_x1'].values, pairs['pos_y1'].values,
-            pairs['pos_x2'].values, pairs['pos_y2'].values,
-            pairs['vel_x1'].values, pairs['vel_y1'].values,
-            pairs['vel_x2'].values, pairs['vel_y2'].values,
-            pairs['acc_x1'].values, pairs['acc_y1'].values,
-            pairs['acc_x2'].values, pairs['acc_y2'].values
-        )
-    else:
-        # Constant velocity TTC (backward compatible)
-        ttc, _, closing_speed = calculate_ttc(
-            pairs['pos_x1'].values, pairs['pos_y1'].values,
-            pairs['pos_x2'].values, pairs['pos_y2'].values,
-            pairs['vel_x1'].values, pairs['vel_y1'].values,
-            pairs['vel_x2'].values, pairs['vel_y2'].values
-        )
+    # Calculate TTC and closing speed for approaching pairs
+    ttc, _, closing_speed = calculate_ttc(
+        pairs['pos_x1'].values, pairs['pos_y1'].values,
+        pairs['pos_x2'].values, pairs['pos_y2'].values,
+        pairs['vel_x1'].values, pairs['vel_y1'].values,
+        pairs['vel_x2'].values, pairs['vel_y2'].values
+    )
     
     pairs['ttc'] = ttc
     pairs['closing_speed'] = closing_speed
+    
+    # Calculate closing acceleration (rate of change of closing speed)
+    pairs = calculate_closing_accel(pairs)
+    
+    # Calculate yaw diff rate (rate of change of heading difference)
+    pairs = calculate_yaw_diff_rate(pairs)
     
     print(f" Approaching pairs: {len(pairs):,}")
     return pairs

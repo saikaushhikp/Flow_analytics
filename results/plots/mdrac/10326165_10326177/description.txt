@@ -1,3 +1,0 @@
-Not a near miss.
-They very same false positive case that occured during the pedestrain zone analysis!
-Reason for detection: It again happened very close to the pedestrain zone.

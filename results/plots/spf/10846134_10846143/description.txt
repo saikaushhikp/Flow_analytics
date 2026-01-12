@@ -1,3 +1,0 @@
-Error.
-One vehicle vanishes midway.
-Also detected by the mdrac.
