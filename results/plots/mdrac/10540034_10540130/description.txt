@@ -1,5 +1,0 @@
-No
-Seems like a detection error
-0034 is shown to crash onto the other vehicle
-it was at the end of detection zone in B road.
-However there was no deceleration.
