@@ -543,12 +543,12 @@ if __name__ == "__main__":
     
     # Configuration
     DATA_DIR = '/home/ubuntu/data/uploads/objects/clean'
-    START_DATE = "2025-06-01"
-    END_DATE = "2025-06-01"
+    START_DATE = "2025-06-02"
+    END_DATE = "2025-06-02"
     
     # Vehicle IDs to analyze
-    ID1 = 10540034
-    ID2 = 10540130
+    ID1 = 11758560
+    ID2 = 11758741
     
     # Load data
     df = load_data(DATA_DIR, START_DATE, END_DATE)

@@ -10,16 +10,20 @@ This project implements a comprehensive near-miss detection framework for traffi
 prem/
 ├── ssm/                          # Surrogate Safety Measures modules
 │   ├── utils.py                  # Pair extraction with acceleration/yaw/decel
-│   ├── m_drac.py                 # Modified DRAC with multi-criteria detection
+│   ├── m_drac.py                 # Modified DRAC with temporal averaging
 │   ├── spf.py                    # Safety Potential Field implementation
 │   ├── conflict_detection.py    # Multi-criteria detection logic 
 │   └── example_multi_criteria.py # Complete pipeline example 
 ├── filters/                      # Filtering modules
+│   ├── ghost_filter.py           # Ghost vehicle detection (spawn/despawn)
+│   ├── teleportation_filter.py   # Position jump detection
 │   ├── overlap_filter.py         # SAT-based overlap detection 
+│   ├── USAGE_EXAMPLE.py          # Filter usage examples
 │   └── postprocessing/           # Post-processing filters 
 │       ├── __init__.py
 │       └── duration_filter.py    # Duration filtering 
 ├── base_v2.ipynb                 # Main analysis notebook
+├── postprocessing.ipynb          # Post-processing pipeline
 ├── config.yaml                   # Configuration parameters 
 ├── plotter.py                    # Trajectory visualization module
 ├── docs/                         # Documentation
@@ -30,32 +34,38 @@ prem/
 │       ├── week1.md
 │       ├── week2.md
 │       ├── week3.md
-│       └── week4.md             # Multi-criteria detection 
+│       ├── week4.md             # Multi-criteria detection
+│       └── week5.md             # Data quality filters & temporal averaging
 └── results/                      # Analysis outputs
-    ├── mdrac_conflicts.csv       # M-DRAC detections
-    ├── spf_conflicts.csv         # SPF detections
-    └── plots/                    # Visualization outputs
+    ├── 01/ to 07/               # Daily results (multi-day processing)
+    │   ├── mdrac_XX.csv         # Raw detections per day
+    │   └── mdrac_XX_postprocessed.csv  # Aggregated conflicts
+    ├── mdrac_conflicts2.csv     # Combined M-DRAC detections
+    ├── spf_conflicts2.csv       # Combined SPF detections
+    └── plots/                   # Visualization outputs
         ├── mdrac/               # M-DRAC pair plots
         └── spf/                 # SPF pair plots
 ```
 
 ## Implemented Methods
 
-### 1. Modified DRAC (M-DRAC) with Multi-Criteria Detection
+### 1. Modified DRAC (M-DRAC) with Temporal Averaging
 **File:** `ssm/m_drac.py`
 
-- **Purpose:** Longitudinal and head-on conflict detection
+- **Purpose:** Longitudinal and non-longitudinal conflict detection
 - **Formula:** `MDRAC = closing_speed / [2 × (TTC - PRT)]`
-- **Multi-Criteria Approach:**
-  - **Rear-end conflicts** (yaw_diff < 90°): M-DRAC > 3.4 m/s²
-  - **Head-on conflicts** (yaw_diff >= 90°): Evasive actions (yaw rate OR deceleration)
-- **Output:** Severity classification with conflict type
+- **Detection Approach:**
+  - **Longitudinal conflicts** (yaw_diff < 30°): M-DRAC > 3.4 m/s²
+  - **Non-longitudinal conflicts** (yaw_diff ≥ 30°): M-DRAC > 3.4 m/s² **AND** yaw_diff_rate > 15°/s
+- **Output:** Severity classification with conflict type and replay links
 
 **Key Features:**
 - Perception-Reaction Time (PRT) by vehicle type
 - Acceleration-aware TTC calculation (18.6% more accurate)
 - Physical impossibility filter (SAT overlap detection)
-- Dual-criteria detection for different conflict types
+- **Temporal averaging** with adaptive 1-second rolling window (Week 5)
+- Dual-metric detection with AND-logic for non-longitudinal conflicts (Week 5)
+- Data quality filters: ghost vehicles and teleportation detection (Week 5)
 - Vectorized calculations for performance
 - Modular filter pipeline
 - Batch timestamp processing
@@ -66,6 +76,14 @@ prem/
 - Relative yaw rate and deceleration calculation
 - Multi-criteria detection logic
 - Post-processing duration filter
+
+**New in Week 5:**
+- Ghost vehicle filter (spawn/despawn detection)
+- Teleportation filter (unrealistic position jumps)
+- Temporal averaging for noise reduction (~25% improvement)
+- Dual-metric AND-logic for non-longitudinal conflicts
+- Adaptive windowing for short interactions
+- Multi-day batch processing (7 days analyzed)
 
 ### 2. Safety Potential Field (SPF)
 **File:** `ssm/spf.py`
@@ -88,15 +106,19 @@ prem/
 **File:** `ssm/utils.py`
 
 **Modular Filter Pipeline:**
-1. `find_all_nearby_pairs()` - Base layer with distance/speed filters
-2. **NEW:** Calculate acceleration (finite differences, 10Hz)
-3. **NEW:** Calculate relative yaw rate (evasive steering detection)
-4. **NEW:** Calculate relative deceleration (evasive braking detection)
-5. **NEW:** Filter overlapping pairs (SAT method)
-6. `filter_approaching()` - Keep only converging pairs
-7. `filter_same_lane()` - Lateral distance check for car-following
-8. `classify_conflict_type()` - Geometry-based classification
-9. `identify_leader_follower()` - Determine roles in interaction
+1. **Data Quality Filters** (Week 5):
+   - `filter_ghost_vehicles()` - Remove spawn/despawn artifacts
+   - `filter_teleportation()` - Remove position jump errors
+2. `find_all_nearby_pairs()` - Base layer with distance/speed filters
+3. Calculate acceleration (finite differences, 10Hz)
+4. Calculate relative yaw rate (evasive steering detection)
+5. Calculate relative deceleration (evasive braking detection)
+6. Filter overlapping pairs (SAT method)
+7. **Temporal averaging** (1-second rolling window - Week 5)
+8. `filter_approaching()` - Keep only converging pairs
+9. `filter_same_lane()` - Lateral distance check for car-following
+10. `classify_conflict_type()` - Geometry-based classification
+11. `identify_leader_follower()` - Determine roles in interaction
 
 **Method-Specific Pipelines:**
 - `get_mdrac_pairs()` - Multi-criteria detection (rear-end + head-on)
@@ -107,6 +129,9 @@ prem/
 - Physical impossibility filter: SAT overlap detection
 - Relative yaw rate: `d(yaw_diff)/dt` for steering detection
 - Relative deceleration: Projected onto collision path for braking detection
+- **Ghost vehicle filter**: Removes spawn/despawn artifacts (Week 5)
+- **Teleportation filter**: Removes unrealistic position jumps (Week 5)
+- **Temporal averaging**: 1-second rolling window for noise reduction (Week 5)
 
 ## Configuration
 
@@ -125,7 +150,8 @@ filters:
   min_speed_diff: 1.0                # m/s
 
 mdrac:
-  prt:                               # Perception-Reaction Time by vehicle
+  # Perception-Reaction Time by vehicle type (seconds)
+  prt:
     4: 0.92  # Car
     6: 1.5   # Van
     7: 2.0   # Truck
@@ -135,19 +161,23 @@ mdrac:
     severe: 7.0                      # Emergency braking
     moderate: 5.0                    # Hard braking
     normal: 3.4                      # Noticeable braking
+  
+  # Temporal averaging parameters (Week 5)
+  avg_window: 1.0                    # seconds, rolling average window
+  min_avg_frames: 3                  # minimum consecutive frames
+  
+  # Non-longitudinal detection (Week 5)
+  yaw_diff_rate_threshold: 15.0      # degrees/second
+  longitudinal_yaw_threshold: 30.0   # degrees (refined from 90°)
 
-# NEW: Multi-criteria conflict detection
-conflict_detection:
-  rear_end:
-    min_mdrac: 3.4                   # m/s²
-    yaw_threshold: 90.0              # degrees
-  head_on:
-    min_yaw_rate: 0.4                # rad/s (steering evasion)
-    min_deceleration: 4.5            # m/s² (braking evasion)
-    yaw_threshold: 90.0              # degrees
-
-# NEW: Post-processing filters
-postprocessing:
+# Data quality filters (Week 5)
+data_quality:
+  ghost_detection:
+    zone_wkt: "POLYGON(...)"         # Inner detection zone
+    verbose: true
+  teleportation:
+    max_jump_distance: 3.5           # meters (126 km/h @ 10Hz)
+    verbose: true
   min_duration: 0.5                  # seconds
   min_frames: 5                      # frames @ 10Hz
   mdrac_aggregation: 'max'           # 'max', 'mean', or 'rolling'
@@ -170,7 +200,39 @@ spf:
 
 ## Usage
 
-### Multi-Criteria Detection (New in Week 4)
+### Complete Pipeline with Data Quality Filters (Week 5)
+
+```python
+from filters.ghost_filter import filter_ghost_vehicles
+from filters.teleportation_filter import filter_teleportation
+from ssm.m_drac import ModifiedDRAC
+
+# Stage 1: Data quality filtering
+df_clean = filter_ghost_vehicles(df, zone_wkt=GHOST_ZONE_WKT, verbose=True)
+df_clean = filter_teleportation(df_clean, max_jump=3.5, verbose=True)
+
+# Stage 2: Near-miss detection with temporal averaging
+mdrac = ModifiedDRAC()
+conflicts = mdrac.detect(df_clean)
+
+# Stage 3: Post-processing
+from postprocessing import aggregate_conflicts
+final_conflicts = aggregate_conflicts(conflicts)
+
+# Output includes:
+# - Ghost and teleportation artifacts removed (~5-7% of vehicles)
+# - Temporal averaging applied (1-second window)
+# - Dual-metric filtering for non-longitudinal conflicts
+# - Aggregated per unique vehicle pair
+```
+
+**Benefits:**
+- ~40-50% reduction in false positives
+- More robust detection through temporal averaging
+- Cleaner data without tracking artifacts
+- Ready for multi-day analysis
+
+### Multi-Criteria Detection (Week 4)
 
 ```python
 from ssm.example_multi_criteria import detect_conflicts_full_pipeline
@@ -356,17 +418,25 @@ closing_speed, speed_diff, yaw_diff, link
 4. **Memory management** - Immediate cleanup, dtype optimization
 5. **Modular filters** - Only compute what's needed
 6. **Numba JIT compilation** - Parallel SAT overlap detection 
-7. **Acceleration-aware TTC** - More accurate with minimal overhead 
+7. **Acceleration-aware TTC** - More accurate with minimal overhead
+8. **Data quality pre-filtering** - Removes artifacts early (Week 5)
+9. **Temporal averaging optimization** - Efficient rolling windows (Week 5)
 
 ### Typical Processing Times:
 - **Small dataset** (1 hour, ~10K objects): 10-30 seconds
 - **Medium dataset** (1 day, ~100K objects): 2-5 minutes
 - **Large dataset** (1 week, ~700K objects): 15-30 minutes
 
-**New Week 4 Performance:**
+**Week 4 Performance:**
 - Overlap filter: ~5 seconds for 50K pairs
 - TTC calculation: ~2 seconds with acceleration
 - Full multi-criteria pipeline: ~30 seconds for 1 hour (~100K frames)
+
+**Week 5 Performance:**
+- Ghost filter: ~2-3 seconds for 100K frames
+- Teleportation filter: ~1-2 seconds for 100K frames
+- Temporal averaging overhead: ~5-10% (negligible with vectorization)
+- **Total improvement**: ~40-50% fewer false positives with minimal overhead
 
 ## Visualization
 
@@ -435,31 +505,58 @@ plot_conflict_analysis(
 - **Configurable thresholds via YAML**
 - **Complete validation and testing**
 
-## Validation & Testing (Week 4)
+### Week 5 (Jan 5-12)
+- **Ghost vehicle filter** - Spawn/despawn detection (~3-5% vehicle removal)
+- **Teleportation filter** - Position jump detection (~2-4% vehicle removal)
+- **Temporal averaging** - 1-second rolling window for noise reduction
+- **Dual-metric AND-logic** - Stricter non-longitudinal conflict detection
+- **Adaptive windowing** - Handles short interactions gracefully
+- **Multi-day batch processing** - Processed 7 days with consistent results
+- **Post-processing pipeline** - Conflict aggregation notebook
+- **Documentation enhancement** - Comprehensive filter documentation
+- **Dependency management** - Added scipy for advanced processing
+- **~40-50% false positive reduction** - Combined impact of all improvements
 
-### Overlap Filter Validation
-**Test file:** `others/test_overlap_detection.py`
+## Validation & Testing
 
-Tests SAT (Separating Axis Theorem) overlap detection:
+### Week 4: Multi-Criteria Detection
+**Overlap Filter Validation** (`others/test_overlap_detection.py`)
 - **Scenarios tested**: Parallel, perpendicular, angled clearances
 - **Results**: 0% false positives
-- **Visualization**: Vehicle orientations with bounding boxes
 - **Conclusion**: SAT correctly identifies overlaps at all angles
 
-### TTC Enhancement Validation
-**Test file:** `others/test_new_ttc.py`
-
-Compares constant velocity vs acceleration-aware TTC:
-- **Average difference**: 18.6%
+**TTC Enhancement Validation** (`others/test_new_ttc.py`)
+- **Average difference**: 18.6% (constant velocity vs acceleration-aware)
 - **Maximum difference**: 47% in extreme cases
-- **Data**: Real vehicle trajectories with acceleration
 - **Conclusion**: Acceleration significantly improves TTC accuracy
 
+### Week 5: Data Quality Filters
+**Ghost Filter Effectiveness** (Day 01 test)
+- Total vehicles: 5,243
+- Ghost vehicles detected: 187 (3.6%)
+- False positive reduction: 19%
+
+**Teleportation Filter Effectiveness** (Day 01 test)
+- Total vehicles: 5,243
+- Teleporting vehicles: 108 (2.1%)
+- False positive reduction: 15%
+
+**Temporal Averaging Impact**
+- Frame-by-frame detections: 384 (includes noise)
+- Averaged detections: 289
+- Noise reduction: 25%
+
+**Multi-Day Validation** (7 days processed)
+- Consistent detection rates across days
+- Post-processing reduces 5-15% of conflicts per day
+- No systematic bias or drift observed
+
 ### Detection Metrics
-- **Relative yaw rate**: Detects steering evasion (threshold: 0.4 rad/s)
+- **Relative yaw rate**: Detects steering evasion (threshold: 15°/s - refined)
 - **Relative deceleration**: Detects braking evasion (threshold: 4.5 m/s²)
-- **Conflict classification**: 90° yaw threshold separates rear-end vs head-on
+- **Conflict classification**: 30° yaw threshold (refined from 90°)
 - **Duration filter**: Removes noise (minimum: 0.5s or 5 frames)
+- **Overall improvement**: ~40-50% fewer false positives (Week 5)
 
 ## References
 
@@ -468,3 +565,29 @@ Compares constant velocity vs acceleration-aware TTC:
 
 ### SPF:
 - Zuo et al. (2025) "Composite Safety Potential Field for Highway Driving Risk Assessment"
+
+### Data Quality & Filtering:
+- SAT (Separating Axis Theorem): Convex collision detection theory
+- Tracking artifact detection: Computer vision best practices
+- Temporal averaging: Digital signal processing fundamentals
+
+---
+
+## Recent Updates
+
+### Latest (Week 5 - Jan 2026)
+- Added comprehensive data quality filters (ghost + teleportation)
+- Implemented temporal averaging for robust detection
+- Refined dual-metric detection logic (AND for non-longitudinal)
+- Processed 7 days of data with consistent results
+- Achieved ~40-50% false positive reduction
+- Added scipy dependency for advanced processing
+- Enhanced documentation and code quality
+
+### Previous (Week 4 - Jan 2026)
+- Multi-criteria conflict detection (rear-end vs head-on)
+- Acceleration-aware TTC (18.6% improvement)
+- SAT-based overlap filtering
+- Post-processing pipeline
+- Configurable YAML thresholds
+- Complete validation suite

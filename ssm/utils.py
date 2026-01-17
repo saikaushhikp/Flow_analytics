@@ -372,6 +372,14 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     result = filter_overlapping_pairs(result, buffer=OVERLAP_BUFFER, verbose=False)
     
     print(f"  ✓ Generated {len(result):,} nearby pairs (after overlap filter)")
+    
+    # Stage 7: Add zone information if available (automatic)
+    if 'zone' in df.columns and len(result) > 0:
+        zone_map = dict(zip(df['id'], df['zone']))
+        result['zone1'] = result['id1'].map(zone_map)
+        result['zone2'] = result['id2'].map(zone_map)
+        print(f"  ✓ Added zone information (zone1/zone2 columns)")
+    
     return result
 
 
@@ -419,12 +427,47 @@ def filter_approaching(pairs: pd.DataFrame) -> pd.DataFrame:
 
 def filter_same_lane(pairs: pd.DataFrame, max_lateral: float) -> pd.DataFrame:
     """
-    Lateral distance check: lat_dist = |Δr × û| where û = v_faster/|v_faster|
-    Keeps pairs with lateral_dist <= max_lateral
+    Dual same-lane filtering: Zone-based AND lateral distance.
+    
+    Applies TWO filters:
+    1. Zone equality: zone1 == zone2 (ensures same lane)
+    2. Lateral distance: <= max_lateral (ensures geometric alignment)
+    
+    This dual approach is more robust than either filter alone.
+    
+    Args:
+        pairs: DataFrame with zone1, zone2 columns (REQUIRED)
+        max_lateral: Maximum perpendicular distance (meters) - typically 3.0m
+    
+    Returns:
+        Filtered pairs where vehicles are in same lane AND laterally close
     """
     if len(pairs) == 0:
         return pairs
     
+    # Check for required zone columns
+    if 'zone1' not in pairs.columns or 'zone2' not in pairs.columns:
+        raise ValueError(
+            "filter_same_lane requires 'zone1' and 'zone2' columns in pairs DataFrame. "
+            "Ensure zone information is added before calling this function."
+        )
+    
+    initial_count = len(pairs)
+    
+    # =========================================================================
+    # Filter 1: Zone-based (same lane)
+    # =========================================================================
+    same_zone_mask = pairs['zone1'] == pairs['zone2']
+    pairs = pairs[same_zone_mask].copy()
+    zone_filtered_count = initial_count - len(pairs)
+    print(f"  Zone filter (same lane): {len(pairs):,} pairs (filtered {zone_filtered_count:,} different-lane)")
+    
+    if len(pairs) == 0:
+        return pairs
+    
+    # =========================================================================
+    # Filter 2: Lateral distance (geometric alignment)
+    # =========================================================================
     # Position difference
     dx = pairs['pos_x2'].values - pairs['pos_x1'].values
     dy = pairs['pos_y2'].values - pairs['pos_y1'].values
@@ -450,8 +493,13 @@ def filter_same_lane(pairs: pd.DataFrame, max_lateral: float) -> pd.DataFrame:
     # Keep pairs within lateral threshold (or stationary)
     lateral_mask = (lat_dist <= max_lateral) | (~moving_mask)
     
+    after_zone = len(pairs)
     pairs = pairs[lateral_mask].copy()
-    print(f"  Same-lane pairs (lat <= {max_lateral}m): {len(pairs):,}")
+    lateral_filtered_count = after_zone - len(pairs)
+    
+    print(f"  Lateral filter (<= {max_lateral}m): {len(pairs):,} pairs (filtered {lateral_filtered_count:,} not aligned)")
+    print(f"  ✓ Total filtered: {initial_count - len(pairs):,} pairs | Remaining: {len(pairs):,} pairs")
+    
     return pairs
 
 
@@ -582,7 +630,27 @@ def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool =
     if len(pairs) == 0:
         return pairs
     
-    # Stage 3: Same-lane filter (critical for car-following)
+    # Stage 2.5: Add zone information BEFORE same-lane filter
+    # This is CRITICAL - filter_same_lane requires zone1/zone2 columns
+    if skip_pair_generation:
+        # Optimized workflow: pairs should already have zone1/zone2 from base_pairs
+        if 'zone1' not in pairs.columns or 'zone2' not in pairs.columns:
+            raise ValueError(
+                "When using skip_pair_generation=True, pairs must have zone1/zone2 columns. "
+                "Ensure your base_pairs include zone information before passing to get_mdrac_pairs()."
+            )
+    else:
+        # Direct workflow: add zone info from vehicle DataFrame
+        if 'zone' not in df.columns:
+            raise ValueError(
+                "Vehicle DataFrame must have 'zone' column for M-DRAC detection. "
+                "Use assign_zones_to_vehicles() before calling get_mdrac_pairs()."
+            )
+        zone_map = dict(zip(df['id'], df['zone']))
+        pairs['zone1'] = pairs['id1'].map(zone_map)
+        pairs['zone2'] = pairs['id2'].map(zone_map)
+    
+    # Stage 3: Same-lane filter (zone-based - filters different lanes on same road)
     pairs = filter_same_lane(pairs, config['filters']['max_lateral_distance'])
     if len(pairs) == 0:
         return pairs
@@ -601,13 +669,19 @@ def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool =
     pairs = pairs[(pairs['ttc'] <= max_ttc) & (pairs['closing_speed'] >= min_closing)].copy()
     print(f"  Final MDRAC pairs: {len(pairs):,}")
     
-    # Stage 7: Add zone information (if available in original df)
-    if 'zone' in df.columns:
-        zone_map = dict(zip(df['id'], df['zone']))
-        pairs['zone1'] = pairs['id1'].map(zone_map)
-        pairs['zone2'] = pairs['id2'].map(zone_map)
-        # For MDRAC (same-lane), both vehicles should be in same zone
-        pairs['zone'] = pairs['zone1']  # They should match due to same-lane filter
+    # Stage 7: Add zone information (depends on workflow)
+    if skip_pair_generation:
+        # Optimized workflow: pairs already have zone1/zone2 from base_pairs
+        # Just add combined 'zone' column if not present
+        if 'zone' not in pairs.columns and 'zone1' in pairs.columns:
+            pairs['zone'] = pairs['zone1']  # Should all match due to same-lane filter
+    else:
+        # Direct workflow: add zone info from original vehicle DataFrame
+        if 'zone' in df.columns:
+            zone_map = dict(zip(df['id'], df['zone']))
+            pairs['zone1'] = pairs['id1'].map(zone_map)
+            pairs['zone2'] = pairs['id2'].map(zone_map)
+            pairs['zone'] = pairs['zone1']  # Should match due to same-lane filter
     
     return pairs
 

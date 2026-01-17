@@ -333,9 +333,9 @@ class ModifiedDRAC:
     
     def format_output(self, pairs: pd.DataFrame) -> pd.DataFrame:
         """
-        Format final output with clean schema.
+        Format final output with clean schema including zone information.
         
-        Schema: timestamp, id1, id2, [label1]_v_[label2], leader, dist, TTC, MDRAC, 
+        Schema: timestamp, id1, id2, zone, [label1]_v_[label2], leader, dist, TTC, MDRAC, 
                 closing_speed, speed_diff, yaw_diff, link
         
         Args:
@@ -368,11 +368,12 @@ class ModifiedDRAC:
         replay_times = timestamps
         links = replay_times.apply(lambda t: f"https://di-india-collab-2.flow-analytics.io/tools/replay/{t.strftime('%Y-%m-%d')}T{t.strftime('%H:%M:%S')}Z")
         
-        # Build output DataFrame
+        # Build output DataFrame with zone information
         output = pd.DataFrame({
             'timestamp': pairs['timestamp'].values,
             'id1': pairs['id1'].values,
             'id2': pairs['id2'].values,
+            'zone': pairs.get('zone', 'unknown'),  # Add zone info if available
             'interaction': interaction.values,
             'leader': leader_id,
             'dist': pairs['distance'].values,
@@ -389,7 +390,7 @@ class ModifiedDRAC:
     def _empty_output(self) -> pd.DataFrame:
         """Return empty DataFrame with correct schema."""
         return pd.DataFrame(columns=[
-            'timestamp', 'id1', 'id2', 'interaction', 'leader', 'dist', 'TTC', 
+            'timestamp', 'id1', 'id2', 'zone', 'interaction', 'leader', 'dist', 'TTC', 
             'MDRAC', 'closing_speed', 'speed_diff', 'yaw_diff', 'link'
         ])
 
