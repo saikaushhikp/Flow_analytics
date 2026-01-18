@@ -1,93 +1,200 @@
-# SSM (Surrogate Safety Measures) Configuration
+# =============================================================================
+# PREM (Proactive Road Event Monitoring) Configuration
+# =============================================================================
+# Complete configuration file for traffic safety analysis
+# Regions: Brussels, Oulu
 
-# Vehicle type label mappings
-vehicle_labels:
-  pedestrian: 1
-  bicycle: 2
-  motorcycle: 3
-  car: 4
-  escooter: 5
-  van: 6
-  truck: 7
-  bus: 8
+# =============================================================================
+# DATA LOADING
+# =============================================================================
+data:
+  # Optimized dtypes for memory efficiency
+  dtypes:
+    id: int32
+    label: int8
+    pos_x: float32
+    pos_y: float32
+    pos_z: float32
+    size_x: float32
+    size_y: float32
+    size_z: float32
+    vel: float32
+    vel_x: float32
+    vel_y: float32
+    vel_z: float32
+    yaw: float32
+    yaw_rate: float32
+  
+  chunk_size: 500000  # Rows per chunk for large datasets
 
-light_vehicles: [1, 2, 3, 5]  # Pedestrian, bicycle, motorcycle, e-scooter
-heavy_vehicles: [4, 6, 7, 8]  # Car, van, truck, bus
+# =============================================================================
+# PREPROCESSING FILTERS
+# =============================================================================
+preprocessing:
+  # Lifetime Filter - removes short-lived detections (noise/false positives)
+  lifetime_filter:
+    enabled: true
+    min_lifespan:  # Minimum frames per vehicle type
+      1: 30   # pedestrian
+      2: 80   # bicycle
+      3: 60   # motorcycle
+      4: 90   # car
+      5: 30   # escooter
+      6: 100  # van
+      7: 100  # truck
+      8: 180  # bus
+  
+  # Footpath Zone Filter - removes vehicles in pedestrian-only areas
+  footpath_filter:
+    enabled: true
+    max_speed:  # Maximum speed (m/s) per vehicle type in footpath zones
+      1: 4.0   # pedestrian
+      2: 6.0   # bicycle
+      3: 12.0  # motorcycle
+      4: 12.0  # car
+      5: 4.0   # escooter
+      6: 12.0  # van
+    forbidden_labels: [3, 4, 5, 6, 7, 8]  # vehicle types not allowed in footpaths
+  
+  # Crosswalk Filter - removes vehicles moving parallel to crosswalks
+  crosswalk_filter:
+    enabled: true
+    max_parallel_angle: 45.0  # degrees - vehicles within this angle are considered parallel
+  
+  # Static Object Filter - removes stationary vehicles (parked cars)
+  static_filter:
+    enabled: true
+    min_speed: 0.5       # m/s - minimum sustained speed
+    window_size: 10      # frames - window for checking sustained low speed
+  
+  # Ghost Filter - removes spawn/despawn artifacts
+  ghost_filter:
+    enabled: true
+    spawn_threshold: 5.0  # m/s - max allowed initial velocity
+    despawn_threshold: 5.0  # m/s - max allowed final velocity
+  
+  # Overlap Filter - removes physically impossible overlapping pairs
+  overlap_filter:
+    enabled: true
+    buffer: 0.5  # meters - safety buffer for overlap check
 
-# Pair extraction filters for vehicle-vehicle conflicts
+# =============================================================================
+# SSM PAIR GENERATION FILTERS
+# =============================================================================
 filters:
-  vehicle_labels: [4, 6, 7, 8]
-  min_vehicle_speed: 1.5        # m/s, filters stationary/parking vehicles
-  max_distance: 8.0            # m, maximum distance between vehicles to consider
-  max_lateral_distance: 3.0     # m, maximum perpendicular distance (same lane check)
-  max_ttc: 1.8                  # seconds, captures moderate to critical near-misses
-  min_closing_speed: 1.0        # m/s, filters slow-closing interactions
-  min_speed_diff: 0.5           # m/s, follower must be faster than leader
+  # Vehicle type filter - which vehicle types to analyze
+  vehicle_labels: [4, 6, 7, 8]  # car, van, truck, bus
+  
+  # Basic motion filters
+  min_vehicle_speed: 1.5     # m/s - filters stationary/parking vehicles
+  max_distance: 8.0          # m - maximum distance between vehicles to consider
+  max_lateral_distance: 3.0  # m - maximum perpendicular distance (same lane check)
+  
+  # Conflict detection filters
+  max_ttc: 1.8               # seconds - Time-To-Collision threshold
+  min_closing_speed: 1.0     # m/s - minimum rate of gap closure
+  min_speed_diff: 0.5        # m/s - follower must be faster than leader
 
-# M-DRAC (Modified Deceleration Rate to Avoid Crash) parameters
+# =============================================================================
+# M-DRAC (Modified Deceleration Rate to Avoid Crash)
+# =============================================================================
 mdrac:
   # Perception-Reaction Time by vehicle type (seconds)
   prt:
-    1: 1.0   # Pedestrian
-    2: 1.0   # Bicycle
-    3: 0.92  # Motorcycle
-    4: 0.92  # Car
-    5: 1.0   # E-scooter
-    6: 1.5   # Van
-    7: 2.0   # Truck
-    8: 2.0   # Bus
+    1: 1.0   # pedestrian
+    2: 1.0   # bicycle
+    3: 0.92  # motorcycle
+    4: 0.92  # car
+    5: 1.0   # escooter
+    6: 1.5   # van
+    7: 2.0   # truck
+    8: 2.0   # bus
   
-  # Minimum M-DRAC threshold to classify as near-miss (m/s²)
-  min_mdrac: 3.4
+  # Detection thresholds
+  min_mdrac: 3.4  # m/s² - minimum M-DRAC value to classify as near-miss
   
-  # Severity classification thresholds (m/s²)
+  # Severity classification thresholds
   severity:
-    severe: 7.0      # Emergency braking
-    moderate: 5.0    # Hard braking
-    normal: 3.4      # Noticeable braking (below this = not a near-miss)
+    moderate: 5.0  # m/s² - moderate severity threshold
+    severe: 7.0    # m/s² - severe severity threshold
+    # normal: min_mdrac to moderate
+    # moderate: moderate to severe  
+    # severe: severe to infinity
+    # critical: infinity (TTC <= PRT, unavoidable)
   
-  # Adaptive detection parameters
-  closing_accel_threshold: -0.2  # m/s², negative = gap closing slower (active response)
-  min_time_buffer: 0.1           # seconds, minimum time_available to cap MDRAC (avoid infinity)
+  # Adaptive M-DRAC parameters
+  closing_accel_threshold: -0.5  # m/s² - threshold for active response detection
+  min_time_buffer: 0.2           # seconds - minimum time buffer to avoid infinity
   
   # Temporal averaging parameters
-  avg_window: 1.0                # seconds, rolling average window
-  min_avg_frames: 3              # minimum consecutive frames for sustained detection
+  avg_window: 1.0          # seconds - rolling average window
+  min_avg_frames: 3        # minimum frames required for sustained event
   
-  # Yaw-based detection (non-longitudinal conflicts)
-  yaw_diff_rate_threshold: 15.0  # degrees/second, sudden heading change threshold
-  longitudinal_yaw_threshold: 30.0  # degrees, yaw_diff below = longitudinal conflict
+  # Dual-metric detection (for non-longitudinal conflicts)
+  yaw_diff_rate_threshold: 15.0      # deg/s - yaw rate threshold
+  longitudinal_yaw_threshold: 30.0   # degrees - threshold to classify as longitudinal
 
-# SPF (Safety Potential Field) parameters
+# =============================================================================
+# SPF (Safety Potential Field)
+# =============================================================================
 spf:
-  # Objective Field (O-field) - Physical collision probability
-  objective:
-    beta_p: 10        # Spatial shape factor (binary-like collision boundary)
-    beta_t: 2         # Temporal shape factor (quadratic time pressure)
-    t_star: 7.5       # Time horizon in seconds (look-ahead limit)
+  # Field parameters
+  beta_p: 0.5  # Physical field weight
+  beta_t: 0.3  # Temporal field weight
+  t_star: 3.0  # seconds - characteristic time scale
   
-  # Subjective Field (S-field) - Driver discomfort
-  subjective:
-    gamma_y: 1.4310   # Lateral scale (constant) [meters]
-    beta_y: 4.9956    # Lateral shape (constant) [dimensionless]
+  # Detection threshold
+  min_spf: 0.1  # minimum SPF value to classify as conflict
   
-  # Risk thresholds for both fields
-  thresholds:
-    warning: 0.5     # e^-1 threshold (high risk starts)
-    danger: 0.70      # High danger level
-    critical: 0.90    # Critical level
-  
-  # Minimum risk threshold to classify as near-miss
-  min_risk: 0.50
-  
-  # Composite risk combination method ('max', 'probabilistic', 'weighted')
-  composite_method: 'probabilistic'
+  # Severity classification
+  severity:
+    moderate: 0.2  # moderate severity threshold
+    severe: 0.4    # severe severity threshold
+    # normal: min_spf to moderate
+    # moderate: moderate to severe
+    # severe: severe to 1.0
 
-# Processing parameters
+# =============================================================================
+# POSTPROCESSING FILTERS
+# =============================================================================
+postprocessing:
+  # Teleportation Filter - removes unrealistic position jumps
+  teleportation_filter:
+    enabled: true
+    max_speed_threshold: 50.0  # m/s - maximum realistic speed
+    
+  # Duration Filter - aggregates sustained conflicts
+  duration_filter:
+    enabled: true
+    min_sustained_frames: 3  # minimum frames for valid conflict
+
+# =============================================================================
+# PROCESSING OPTIONS
+# =============================================================================
 processing:
-  chunk_size: 500000
-  dtype_optimization: true
-  verbose: true
+  verbose: true        # print detailed logs
+  batch_size: 20000    # batch size for pair generation
+  num_threads: -1      # -1 = use all available cores
+  
+  # Zone assignment
+  zone_batch_size: 100000  # batch size for spatial joins
 
-# Process multiple timestamps per batch for vectorized pair generation
-timestamp_batch_size: 20000
+# =============================================================================
+# VISUALIZATION
+# =============================================================================
+visualization:
+  plot_conflicts: false       # generate trajectory plots for conflicts
+  max_plots: 100             # maximum number of plots to generate
+  plot_format: 'png'         # output format (png, pdf, svg)
+  dpi: 150                   # plot resolution
+
+# =============================================================================
+# OUTPUT
+# =============================================================================
+output:
+  save_format: 'csv'         # csv or xlsx
+  include_metadata: true     # include detection metadata
+  generate_replay_links: true  # generate replay URLs
+  
+  # Replay link template (region-specific)
+  replay_base_url: "https://di-india-collab-2.flow-analytics.io/tools/replay/"

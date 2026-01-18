@@ -17,7 +17,7 @@ from shapely import wkt
 from shapely.geometry import Point
 import geopandas as gpd
 from tqdm import tqdm
-from filters.overlap_filter import filter_overlapping_pairs, OVERLAP_BUFFER
+from filters.preprocessing.overlap_filter import filter_overlapping_pairs, OVERLAP_BUFFER
 
 # Numba for parallel processing
 try:
