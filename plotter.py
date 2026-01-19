@@ -2,11 +2,24 @@
 Trajectory Visualization Module for Near-Miss Analysis
 
 Functions:
-    - plot_conflict_analysis: Main function to generate all plots for a pair
+    - plot_all_pairs_from_csv: Batch generate plots for all pairs in CSV (NEW!)
+    - plot_conflict_analysis: Main function to generate all plots for a single pair
     - plot_trajectories: 2D spatial plot of vehicle paths
     - plot_distance_over_time: Distance between vehicles over time
     - plot_closing_speed_over_time: Closing speed over time
     - plot_velocity_over_time: Velocity comparison over time
+    - plot_yaw_diff_over_time: Yaw difference over time
+
+Usage:
+    # Batch mode (recommended):
+    df = load_data('/data/clean', '2025-06-01', '2025-06-01')
+    plot_all_pairs_from_csv(
+        csv_path='results/brussels/mdrac/01/mdrac_01.csv',
+        data_df=df
+    )
+    
+    # Single pair mode:
+    plot_conflict_analysis(df, id1=10520140, id2=10520195)
 """
 
 import numpy as np
@@ -486,6 +499,97 @@ def plot_conflict_analysis(
     return fig1, fig2, fig3, fig4, fig5
 
 
+def plot_all_pairs_from_csv(
+    csv_path: str,
+    data_df: pd.DataFrame,
+    output_base_dir: Optional[str] = None,
+    time_window: Optional[float] = None,
+    show_plots: bool = False
+) -> None:
+    """
+    Generate plots for all vehicle pairs in a CSV file.
+    
+    Reads M-DRAC detection results CSV and creates trajectory analysis plots
+    for each unique pair. Each pair gets its own subfolder.
+    
+    Args:
+        csv_path: Path to M-DRAC results CSV (with id1, id2 columns)
+        data_df: DataFrame with all trajectory data (from parquet files)
+        output_base_dir: Base directory for saving plots. If None, derived from csv_path
+        time_window: Optional time window (seconds) around conflict
+        show_plots: Whether to display plots (default: False for batch processing)
+    
+    Example:
+        >>> df = load_data('/data/clean', '2025-06-01', '2025-06-01')
+        >>> plot_all_pairs_from_csv(
+        ...     csv_path='/home/ubuntu/prem/results/brussels/mdrac/01/mdrac_01.csv',
+        ...     data_df=df
+        ... )
+        # Creates: /home/ubuntu/prem/results/brussels/mdrac/01/plots/10520140_10520195/
+        #          /home/ubuntu/prem/results/brussels/mdrac/01/plots/10531051_10531576/
+        #          etc.
+    """
+    # Read CSV to get all pairs
+    print(f"\n{'='*60}")
+    print(f"Batch Plotting from CSV")
+    print(f"{'='*60}")
+    print(f"Reading pairs from: {csv_path}")
+    
+    detections_df = pd.read_csv(csv_path)
+    
+    # Extract unique pairs
+    pairs = detections_df[['id1', 'id2']].drop_duplicates().values
+    print(f"Found {len(pairs)} unique pairs to plot")
+    
+    # Determine output directory
+    if output_base_dir is None:
+        # Default: create 'plots' folder next to CSV file
+        csv_dir = os.path.dirname(csv_path)
+        output_base_dir = os.path.join(csv_dir, 'plots')
+    
+    os.makedirs(output_base_dir, exist_ok=True)
+    print(f"Output directory: {output_base_dir}")
+    
+    # Track statistics
+    successful = 0
+    failed = 0
+    failed_pairs = []
+    
+    print(f"\n{'='*60}")
+    print(f"Generating plots for {len(pairs)} pairs...")
+    print(f"{'='*60}\n")
+    
+    # Process each pair
+    for id1, id2 in tqdm(pairs, desc="Processing pairs", unit="pair"):
+        try:
+            plot_conflict_analysis(
+                df=data_df,
+                id1=int(id1),
+                id2=int(id2),
+                time_window=time_window,
+                output_dir=output_base_dir,
+                show_plot=show_plots
+            )
+            successful += 1
+        except Exception as e:
+            failed += 1
+            failed_pairs.append((id1, id2, str(e)))
+            print(f"\n✗ Failed for pair ({id1}, {id2}): {e}\n")
+    
+    # Summary
+    print(f"\n{'='*60}")
+    print(f"Batch Plotting Summary")
+    print(f"{'='*60}")
+    print(f"✓ Successful: {successful}/{len(pairs)}")
+    
+    if failed > 0:
+        print(f"✗ Failed: {failed}/{len(pairs)}")
+        print(f"\nFailed pairs:")
+        for id1, id2, error in failed_pairs:
+            print(f"  - ({id1}, {id2}): {error}")
+    
+    print(f"\nAll plots saved to: {output_base_dir}/")
+    print(f"{'='*60}\n")
 
 
 # =============================================================================
@@ -539,32 +643,28 @@ def load_data(data_dir: str, start_date: str, end_date: str) -> pd.DataFrame:
 # =============================================================================
 
 if __name__ == "__main__":
-    """Visualize a specific conflict pair."""
+    """
+    Batch plot generation for M-DRAC detection results.
+    
+    Two modes:
+    1. Single pair: Uncomment single pair section
+    2. Batch from CSV: Uncomment batch section (recommended)
+    """
     
     # Configuration
     DATA_DIR = '/home/ubuntu/data/uploads/objects/clean'
-    START_DATE = "2025-06-02"
-    END_DATE = "2025-06-02"
+    START_DATE = "2025-06-05"
+    END_DATE = "2025-06-05"
     
-    # Vehicle IDs to analyze
-    ID1 = 11758560
-    ID2 = 11758741
-    
-    # Load data
+    # Load trajectory data
+    print("Loading trajectory data...")
     df = load_data(DATA_DIR, START_DATE, END_DATE)
     print(f"Loaded {len(df)} records from {START_DATE} to {END_DATE}")
     
-    # Generate visualization
-    print(f"\nGenerating visualization for vehicles {ID1} and {ID2}...")
+    CSV_PATH = '/home/ubuntu/prem/results/brussels/mdrac/05/mdrac_05.csv'
     
-    try:
-        plot_conflict_analysis(
-            df, 
-            id1=ID1, 
-            id2=ID2,
-            output_dir='results/plots/mdrac/02',
-            show_plot=True
-        )
-        print(f"✓ Done!")
-    except Exception as e:
-        print(f"✗ Error: {e}")
+    plot_all_pairs_from_csv(
+        csv_path=CSV_PATH,
+        data_df=df,
+        show_plots=False  # Set True to display each plot (slow for many pairs)
+    )

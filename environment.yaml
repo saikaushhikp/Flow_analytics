@@ -1,0 +1,54 @@
+name: prem_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # Python version
+  - python=3.10
+  
+  # Core scientific computing
+  - numpy>=1.24.0
+  - pandas>=2.0.0
+  - scipy>=1.10.0
+  
+  # Geospatial processing (for zone assignment, spatial operations)
+  - geopandas>=0.13.0
+  - shapely>=2.0.0
+  
+  # Visualization (for trajectory plotting)
+  - matplotlib>=3.7.0
+  
+  # Data loading and formats
+  - pyarrow>=12.0.0  # For parquet file reading
+  - pyyaml>=6.0      # For config.yaml
+  
+  # Progress bars
+  - tqdm>=4.65.0
+  
+  # System monitoring
+  - psutil>=5.9.0
+  
+  # Performance optimization
+  - numba>=0.57.0    # JIT compilation for vectorized operations
+  
+  # Jupyter notebooks (optional but useful)
+  - jupyter>=1.0.0
+  - ipykernel>=6.23.0
+  
+  # Pip packages (VLM and dependencies not available via conda)
+  - pip>=23.0
+  - pip:
+      # VLM API (use new google.genai package)
+      - google-genai>=0.1.0
+      - google-generativeai>=0.8.0
+      
+      # Environment variables
+      - python-dotenv>=1.0.0
+      
+      # Image processing for VLM
+      - pillow>=10.0.0
+      
+      # Local VLM models
+      - transformers>=4.40.0
+      - torch>=2.0.0
+      - qwen-vl-utils>=0.0.3

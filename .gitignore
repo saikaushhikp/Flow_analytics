@@ -8,7 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
-*env*
 .vscode/
 
 # data directories
@@ -24,3 +23,4 @@ others/
 *pem
 *key*
 *secrets*
+.env

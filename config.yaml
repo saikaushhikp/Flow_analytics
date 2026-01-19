@@ -189,6 +189,34 @@ visualization:
   dpi: 150                   # plot resolution
 
 # =============================================================================
+# VLM VALIDATION
+# =============================================================================
+vlm:
+  # Primary backend
+  primary_backend: "gemini"  # "gemini" or "local"
+  
+  # Gemini API settings (free tier: 1500 requests/day)
+  gemini:
+    model: "gemini-2.5-flash"
+    api_key_env: "GEMINI_API_KEY"  # Read from environment variable
+    max_retries: 3
+    timeout: 30  # seconds
+    rate_limit_delay: 1  # seconds between requests
+  
+  # Local model fallback
+  local:
+    model_id: "Qwen/Qwen2.5-VL-3B-Instruct"  # Default to 3B (faster on CPU)
+    # Options: "Qwen/Qwen2.5-VL-3B-Instruct" (7.1GB) or "Qwen/Qwen2.5-VL-7B-Instruct" (16GB)
+    device: "auto"  # "auto", "cpu", or "cuda"
+    torch_dtype: "float32"  # "float32" for CPU, "bfloat16" for GPU
+  
+  # Validation settings
+  confidence_threshold: 70  # Minimum confidence for "REAL_NEARMISS"
+  top_n_validate: 50        # Number of top events to validate
+  save_plots: true          # Save trajectory plots
+  plot_dpi: 150
+
+# =============================================================================
 # OUTPUT
 # =============================================================================
 output:
