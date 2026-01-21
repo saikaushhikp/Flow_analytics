@@ -19,7 +19,7 @@ Usage:
     )
     
     # Single pair mode:
-    plot_conflict_analysis(df, id1=10520140, id2=10520195)
+    plot_conflict_analysis(df, id1=11520140, id2=11520195)
 """
 
 import numpy as np
@@ -123,7 +123,7 @@ def plot_trajectories(
 ) -> plt.Axes:
     """Plot 2D trajectories of two vehicles."""
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 10))
+        fig, ax = plt.subplots(figsize=(11, 11))
     
     # Define colors
     color1 = '#E74C3C'  # Red
@@ -166,9 +166,9 @@ def plot_trajectories(
     
     # Highlight minimum distance
     ax.scatter(min_pos1_x, min_pos1_y, 
-               c='#F39C12', s=300, marker='*', edgecolor='white', linewidth=2, zorder=10)
+               c='#F39C12', s=300, marker='*', edgecolor='white', linewidth=2, zorder=11)
     ax.scatter(min_pos2_x, min_pos2_y, 
-               c='#F39C12', s=300, marker='*', edgecolor='white', linewidth=2, zorder=10)
+               c='#F39C12', s=300, marker='*', edgecolor='white', linewidth=2, zorder=11)
     
     ax.plot([min_pos1_x, min_pos2_x], 
             [min_pos1_y, min_pos2_y], 
@@ -205,7 +205,7 @@ def plot_distance_over_time(
 ) -> plt.Axes:
     """Plot distance between vehicles over time."""
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 4))
+        fig, ax = plt.subplots(figsize=(11, 4))
     
     # Plot distance
     ax.plot(metrics['timestamp'], metrics['distance'], 
@@ -250,7 +250,7 @@ def plot_closing_speed_over_time(
 ) -> plt.Axes:
     """Plot closing speed over time."""
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 4))
+        fig, ax = plt.subplots(figsize=(11, 4))
     
     # Plot closing speed
     ax.plot(metrics['timestamp'], metrics['closing_speed'], 
@@ -290,7 +290,7 @@ def plot_closing_speed_over_time(
     
     # Add annotation
     ax.text(0.02, 0.98, 'Positive = Approaching\nNegative = Separating',
-            transform=ax.transAxes, fontsize=10, verticalalignment='top',
+            transform=ax.transAxes, fontsize=11, verticalalignment='top',
             bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
                      edgecolor='gray', alpha=0.9))
     
@@ -305,7 +305,7 @@ def plot_velocity_over_time(
 ) -> plt.Axes:
     """Plot velocity comparison of both vehicles over time."""
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 4))
+        fig, ax = plt.subplots(figsize=(11, 4))
     
     # Define colors (matching trajectory colors)
     color1 = '#E74C3C'  # Red
@@ -348,7 +348,7 @@ def plot_yaw_diff_over_time(
 ) -> plt.Axes:
     """Plot yaw difference (heading angle difference) between vehicles over time."""
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 4))
+        fig, ax = plt.subplots(figsize=(11, 4))
     
     # Plot yaw difference
     ax.plot(metrics['timestamp'], metrics['yaw_diff'], 
@@ -379,7 +379,7 @@ def plot_yaw_diff_over_time(
     ax.set_title('Heading Angle Difference Over Time', 
                  fontsize=15, fontweight='bold', pad=15)
     
-    ax.legend(loc='best', fontsize=10, framealpha=0.95, 
+    ax.legend(loc='best', fontsize=11, framealpha=0.95, 
               edgecolor='gray', fancybox=True, shadow=True)
     
     ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.5)
@@ -436,7 +436,7 @@ def plot_conflict_analysis(
     os.makedirs(save_dir, exist_ok=True)
     
     # Figure 1: Trajectory plot
-    fig1, ax1 = plt.subplots(figsize=(10, 8))
+    fig1, ax1 = plt.subplots(figsize=(11, 8))
     plot_trajectories(traj1, traj2, id1, id2, ax=ax1)
     fig1.suptitle(f'Trajectory Analysis: Vehicle {id1} vs Vehicle {id2}', 
                   fontsize=16, fontweight='bold', y=0.98)
@@ -525,8 +525,8 @@ def plot_all_pairs_from_csv(
         ...     csv_path='/home/ubuntu/prem/results/brussels/mdrac/01/mdrac_01.csv',
         ...     data_df=df
         ... )
-        # Creates: /home/ubuntu/prem/results/brussels/mdrac/01/plots/10520140_10520195/
-        #          /home/ubuntu/prem/results/brussels/mdrac/01/plots/10531051_10531576/
+        # Creates: /home/ubuntu/prem/results/brussels/mdrac/01/plots/11520140_11520195/
+        #          /home/ubuntu/prem/results/brussels/mdrac/01/plots/11531151_11531576/
         #          etc.
     """
     # Read CSV to get all pairs
@@ -645,23 +645,19 @@ def load_data(data_dir: str, start_date: str, end_date: str) -> pd.DataFrame:
 if __name__ == "__main__":
     """
     Batch plot generation for M-DRAC detection results.
-    
-    Two modes:
-    1. Single pair: Uncomment single pair section
-    2. Batch from CSV: Uncomment batch section (recommended)
     """
     
     # Configuration
     DATA_DIR = '/home/ubuntu/data/uploads/objects/clean'
-    START_DATE = "2025-06-05"
-    END_DATE = "2025-06-05"
+    START_DATE = "2025-06-14"
+    END_DATE = "2025-06-14"
     
     # Load trajectory data
     print("Loading trajectory data...")
     df = load_data(DATA_DIR, START_DATE, END_DATE)
     print(f"Loaded {len(df)} records from {START_DATE} to {END_DATE}")
     
-    CSV_PATH = '/home/ubuntu/prem/results/brussels/mdrac/05/mdrac_05.csv'
+    CSV_PATH = '/home/ubuntu/prem/results/brussels/mdrac/14/mdrac_14.csv'
     
     plot_all_pairs_from_csv(
         csv_path=CSV_PATH,
