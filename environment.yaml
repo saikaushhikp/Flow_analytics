@@ -17,6 +17,10 @@ dependencies:
   
   # Visualization (for trajectory plotting)
   - matplotlib>=3.7.0
+  - seaborn>=0.12.0
+  
+  # Styling and templating
+  - jinja2>=3.1.0
   
   # Data loading and formats
   - pyarrow>=12.0.0  # For parquet file reading
