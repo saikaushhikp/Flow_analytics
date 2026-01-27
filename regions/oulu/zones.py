@@ -72,3 +72,38 @@ def get_exclusion_zone():
         "min_z": -1.5,
         "max_z": 3.5
     }
+
+
+def get_lane_zones():
+    """
+    Lane zones for intra-lane near-miss detection in Oulu.
+    
+    Returns:
+        List of lane zone dicts (R-A, R-B, R-C)
+    """
+    return [
+        {
+            "id": "2001",
+            "name": "R-A",
+            "type": "analytics",
+            "vertices": "POLYGON ((-32.011 -1.877, -31.785 -9.224, 11.735 -7.868, 29.482 -10.92, 65.182 -13.146, 64.264 -1.082, 41.841 -1.606, 22.04 -0.557, -32.011 -1.877))",
+            "min_z": -1.5,
+            "max_z": 3.5
+        },
+        {
+            "id": "2002",
+            "name": "R-B",
+            "type": "analytics",
+            "vertices": "POLYGON ((-32.642 7.704, -32.379 0.23, 63.74 2.066, 63.477 8.753, -32.642 7.704))",
+            "min_z": -1.5,
+            "max_z": 3.5
+        },
+        {
+            "id": "2003",
+            "name": "R-C",
+            "type": "analytics",
+            "vertices": "POLYGON ((1.816 61.123, 11.215 61.388, 12.142 13.995, 3.67 13.731, 1.816 61.123))",
+            "min_z": -1.5,
+            "max_z": 3.5
+        }
+    ]

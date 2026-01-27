@@ -1,0 +1,18 @@
+{
+  "id1": 11007650,
+  "id2": 11007736,
+  "timestamp": "2025-06-01 20:20:07.474462032",
+  "zone": "B-L2",
+  "interaction": "car_v_car",
+  "MDRAC": 14.116566413789522,
+  "TTC": 1.1008201,
+  "dist": 6.834223,
+  "closing_speed": 6.2083015,
+  "speed_diff": 2.2665436,
+  "yaw_diff": 172.6427,
+  "classification": "confirmed_near_miss",
+  "confidence": 100,
+  "reasoning": "The 2D trajectory plot shows a clear converging path between the two vehicles, leading to a close pass with a minimum distance of 6.83m. This proximity is further evidenced by the distance over time plot, which decreases sharply before increasing, and the closing speed plot showing a transition from a high positive approaching speed (including the 6.21 m/s metric) to a negative separating speed. Vehicle 11007736 (blue) exhibits a clear evasive action, significantly decelerating to almost a stop as shown in its velocity profile. An MDRAC of 14.12 m/s\u00b2 and a TTC of 1.10 s are extreme values, indicating a severe conflict requiring very aggressive braking to avoid collision. The yaw difference of 172.64\u00b0 confirms a non-longitudinal, likely near head-on or opposing turn type of conflict. All factors strongly indicate a genuine near-miss event where an evasive maneuver was necessary and executed to prevent a collision.",
+  "backend": "gemini-2.5-flash",
+  "plot_path": "/home/ubuntu/prem/results/brussels/mdrac/01/plots/11007650_11007736/combined_analysis.png"
+}

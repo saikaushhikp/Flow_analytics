@@ -1,0 +1,18 @@
+{
+  "id1": 10531051,
+  "id2": 10531576,
+  "timestamp": "2025-06-01 09:23:02.155287027",
+  "zone": "E-L2",
+  "interaction": "car_v_car",
+  "MDRAC": 3.9683120670235272,
+  "TTC": 0.9693933,
+  "dist": 7.4686885,
+  "closing_speed": 7.704498,
+  "speed_diff": 9.088695,
+  "yaw_diff": 0.0,
+  "classification": "confirmed_near_miss",
+  "confidence": 100,
+  "reasoning": "The trajectory plot shows vehicles 10531051 and 10531576 on converging, nearly parallel paths, achieving a minimum distance of 7.47 m as indicated by the event metrics. This close proximity is confirmed by the \"Distance Between Vehicles Over Time\" plot, which shows a sharp decrease in separation before increasing. A high initial closing speed of 7.70 m/s is evident in the \"Relative Closing Speed Over Time\" plot, corresponding with the decreasing distance. Vehicle 10531576 significantly decelerated from approximately 13.5 m/s to 9 m/s, as shown in the \"Velocity Comparison Over Time\" plot, effectively reducing the closing speed and averting a collision. The critically low Time To Collision (TTC) of 0.97 s and high Modified DRAC (MDRAC) of 3.97 m/s\u00b2 signify an imminent collision requiring substantial evasive action. With a yaw difference of 0.00\u00b0, this interaction is classified as a clear rear-end conflict. All evidence points to a genuine, high-risk near-miss event.",
+  "backend": "gemini-2.5-flash",
+  "plot_path": "/home/ubuntu/prem/results/brussels/mdrac/01/plots/10531051_10531576/combined_analysis.png"
+}

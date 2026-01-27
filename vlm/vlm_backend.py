@@ -29,7 +29,7 @@ def encode_image(image_path: str) -> str:
         return base64.b64encode(f.read()).decode('utf-8')
 
 
-def build_prompt(event_data: dict) -> str:
+def build_validation_prompt(event_data: dict) -> str:
     """
     Build VLM prompt with event context.
     
@@ -39,37 +39,9 @@ def build_prompt(event_data: dict) -> str:
     Returns:
         Formatted prompt string
     """
-    from prompts import get_system_prompt, format_event_metrics
+    from prompts import build_prompt
     
-    system_prompt = get_system_prompt()
-    metrics_text = format_event_metrics(event_data)
-    
-    prompt = f"""{system_prompt}
-
-{metrics_text}
-
-Provide a comprehensive analysis with ALL of the following sections (do not skip any):
-
-Classification: [state: confirmed_near_miss OR false_positive OR uncertain]
-Confidence: [percentage 0-100]%
-
-Reasoning:
-
-**TRAJECTORY ANALYSIS:**
-Describe the vehicle paths in the plot: starting positions, direction changes, convergence patterns, minimum distance point location, and any visible evasive maneuvers. Provide at least 3-4 detailed sentences.
-
-**METRICS ANALYSIS:**
-Analyze the TTC value (1.10s - is this critical?), MDRAC (7.31 m/s² - does this indicate hard braking?), closing speed (4.10 m/s), and yaw difference (2.01°). Explain what each metric reveals about the collision risk. Provide at least 3-4 detailed sentences.
-
-**CONFLICT TYPE:**
-Identify whether this is a rear-end, lateral, angle, or other type of conflict. Assess the severity (minor/moderate/severe/critical). Determine if the vehicles were truly on a collision course or if this could be normal traffic flow. Provide at least 2-3 detailed sentences.
-
-**FINAL CONCLUSION:**
-Synthesize all observations into a clear verdict. Reference specific evidence from the trajectories and metrics. Explain why you assigned this confidence level. State whether this is a genuine near-miss or false positive. Provide at least 2-3 detailed sentences.
-
-Remember: Provide detailed analysis for EVERY section above. Be specific with observations."""
-    
-    return prompt
+    return build_prompt(event_data)
 
 
 def validate_with_gemini(image_path: str, prompt: str) -> Dict:
@@ -236,7 +208,7 @@ def validate_event(plot_path: str, event_data: dict) -> Dict:
         raise FileNotFoundError(f"Plot not found: {plot_path}")
     
     # Build prompt
-    prompt = build_prompt(event_data)
+    prompt = build_validation_prompt(event_data)
     
     # Try API first
     preferred_backend = vlm_config.get('primary_backend', 'gemini')

@@ -1,245 +1,144 @@
 """
 Near-Miss VLM Validation Script
 
-Edit the variables below to validate a specific near-miss event.
-The script will:
-1. Load event data from CSV based on pair IDs
-2. Find the corresponding trajectory plot
-3. Validate using VLM (API first, local fallback on error)
-4. Save results to output folder (description.txt + metadata.json)
+Configure day parameter. Script auto-detects all pairs from CSV
+and loads required trajectory data.
 """
 
 import os
-import json
+import sys
 from pathlib import Path
 import pandas as pd
-from datetime import datetime
 from dotenv import load_dotenv
 
-# Load .env file for API keys
 load_dotenv(Path(__file__).parent.parent / '.env')
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from ssm.utils import load_config
+config = load_config()
+vlm_config = config.get('vlm', {})
+paths_config = vlm_config.get('paths', {})
 
 # =============================================================================
-# CONFIGURATION - Edit these variables
+# CONFIGURATION
 # =============================================================================
 
-# Pair IDs to validate (from your Brussels M-DRAC results)
-id1 = 10520140
-id2 = 10520195
-
-# Path to CSV file containing detection results (Brussels M-DRAC schema)
-csv_path = "/home/ubuntu/prem/results/brussels/mdrac/01/mdrac_01.csv"
-
-# Path to folder containing trajectory plots
-plots_path = f"/home/ubuntu/prem/results/brussels/mdrac/01/plots/{id1}_{id2}"
-
-# Output folder for validation results
-output_path = f"/home/ubuntu/prem/results/brussels/mdrac/01/plots/{id1}_{id2}"
+day = "01"  # Day to process
 
 # =============================================================================
-# Main Validation Logic
+# Auto-construct paths
 # =============================================================================
 
-def find_event_in_csv(csv_path: str, id1: int, id2: int) -> dict:
-    """
-    Find event row in CSV matching the pair IDs.
-    
-    Args:
-        csv_path: Path to detection results CSV (Brussels M-DRAC schema)
-        id1: First vehicle ID
-        id2: Second vehicle ID
-        
-    Returns:
-        Dictionary with event data (Brussels schema)
-    """
-    df = pd.read_csv(csv_path)
-    
-    # Brussels schema uses 'id1' and 'id2' columns
-    # Try both orderings of IDs
-    mask = ((df['id1'] == id1) & (df['id2'] == id2)) | \
-           ((df['id1'] == id2) & (df['id2'] == id1))
-    
-    matching_rows = df[mask]
-    
-    if len(matching_rows) == 0:
-        raise ValueError(f"No event found with pair IDs: {id1}, {id2}")
-    
-    if len(matching_rows) > 1:
-        print(f"Warning: Found {len(matching_rows)} matching rows. Using first one.")
-    
-    row = matching_rows.iloc[0]
-    
-    # Extract event data
-    event_data = {
-        'timestamp': str(row['timestamp']),
-        'id1': int(row['id1']),
-        'id2': int(row['id2']),
-        'zone': str(row['zone']),
-        'interaction': str(row['interaction']),
-        'leader': int(row['leader']),
-        'dist': float(row['dist']),
-        'TTC': float(row['TTC']),
-        'MDRAC': float(row['MDRAC']),
-        'closing_speed': float(row['closing_speed']),
-        'speed_diff': float(row['speed_diff']),
-        'yaw_diff': float(row['yaw_diff']),
-        'link': str(row['link']),
-    }
-    
-    return event_data
+base_results = paths_config.get('base_results', '/home/ubuntu/prem/results/brussels/mdrac')
+base_data = paths_config.get('base_data', '/home/ubuntu/data/uploads/objects/clean')
 
+csv_path = f"{base_results}/{day}/mdrac_{day}.csv"
+output_dir = f"{base_results}/{day}/plots"
 
-def find_plot_file(plots_path: str, id1: int, id2: int) -> str:
-    """
-    Find trajectory plot file matching the pair IDs.
+def load_trajectory_data(csv_path, base_data):
+    """Load trajectory data for required hours from CSV timestamps."""
     
-    Args:
-        plots_path: Path to plots folder (pair-specific folder)
-        id1: First vehicle ID
-        id2: Second vehicle ID
+    print(f"\n[1/3] Loading trajectory data...")
+    
+    # Read CSV to find required hours
+    mdrac_df = pd.read_csv(csv_path)
+    mdrac_df['hour'] = pd.to_datetime(mdrac_df['timestamp']).dt.hour
+    required_hours = sorted(mdrac_df['hour'].unique())
+    
+    print(f"  Required hours from CSV: {required_hours}")
+    
+    # Load parquet files for each hour
+    dfs = []
+    for hour in required_hours:
+        hour_dir = Path(base_data) / f"2025-06-{day}-{hour:02d}"
         
-    Returns:
-        Full path to trajectory plot file
-    """
-    plots_dir = Path(plots_path)
-    
-    if not plots_dir.exists():
-        raise ValueError(f"Plots directory not found: {plots_path}")
-    
-    # Look for trajectory.png (main plot for VLM validation)
-    trajectory_plot = plots_dir / "trajectory.png"
-    if trajectory_plot.exists():
-        return str(trajectory_plot)
-    
-    # Fallback: search for any PNG file
-    png_files = list(plots_dir.glob("*.png"))
-    if png_files:
-        print(f"Warning: trajectory.png not found, using {png_files[0].name}")
-        return str(png_files[0])
-    
-    raise ValueError(f"No plot files found in {plots_path}")
-
-
-def save_results(output_path: str, event_data: dict, validation_result: dict):
-    """
-    Save validation results to output folder.
-    
-    Args:
-        output_path: Output directory path
-        event_data: Event data from CSV
-        validation_result: VLM validation result
-    """
-    output_dir = Path(output_path)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create event identifier for filenames
-    event_id = f"{event_data['id1']}_{event_data['id2']}"
-    
-    # Save description.txt
-    description_path = output_dir / f"{event_id}_description.txt"
-    with open(description_path, 'w') as f:
-        f.write("=" * 60 + "\n")
-        f.write("NEAR-MISS VALIDATION REPORT\n")
-        f.write("=" * 60 + "\n\n")
+        if not hour_dir.exists():
+            print(f"  ⚠ Skipping hour {hour:02d}: directory not found")
+            continue
         
-        f.write(f"Event IDs: {event_data['id1']} vs {event_data['id2']}\n")
-        f.write(f"Timestamp: {event_data['timestamp']}\n")
-        f.write(f"Zone: {event_data['zone']}\n")
-        f.write(f"Interaction: {event_data['interaction']}\n")
-        f.write(f"Leader: ID {event_data['leader']}\n\n")
+        parquet_files = list(hour_dir.glob("*.parquet"))
+        print(f"  Loading hour {hour:02d}: {len(parquet_files)} files")
         
-        f.write("-" * 60 + "\n")
-        f.write("METRICS (M-DRAC)\n")
-        f.write("-" * 60 + "\n")
-        f.write(f"TTC: {event_data['TTC']:.2f} s\n")
-        f.write(f"MDRAC: {event_data['MDRAC']:.2f} m/s²\n")
-        f.write(f"Distance: {event_data['dist']:.2f} m\n")
-        f.write(f"Closing Speed: {event_data['closing_speed']:.2f} m/s\n")
-        f.write(f"Speed Diff: {event_data['speed_diff']:.2f} m/s\n")
-        f.write(f"Yaw Diff: {event_data['yaw_diff']:.2f}°\n")
-        f.write(f"Replay Link: {event_data['link']}\n")
-        f.write("\n")
-        
-        f.write("-" * 60 + "\n")
-        f.write("VLM VALIDATION\n")
-        f.write("-" * 60 + "\n")
-        f.write(f"Classification: {validation_result['classification'].upper()}\n")
-        f.write(f"Confidence: {validation_result['confidence']}%\n")
-        f.write(f"Backend Used: {validation_result['backend']}\n\n")
-        
-        f.write("Reasoning:\n")
-        f.write(validation_result['reasoning'] + "\n\n")
-        
-        f.write("=" * 60 + "\n")
+        for pf in parquet_files:
+            try:
+                df = pd.read_parquet(pf)
+                dfs.append(df)
+            except Exception as e:
+                print(f"    Error loading {pf.name}: {e}")
     
-    # Save metadata.json
-    metadata_path = output_dir / f"{event_id}_metadata.json"
-    metadata = {
-        'event_data': event_data,
-        'validation': validation_result,
-        'validation_timestamp': datetime.now().isoformat(),
-    }
+    if not dfs:
+        raise ValueError("No trajectory data loaded!")
     
-    with open(metadata_path, 'w') as f:
-        json.dump(metadata, f, indent=2)
+    combined_df = pd.concat(dfs, ignore_index=True)
+    combined_df = combined_df.sort_values('timestamp').reset_index(drop=True)
     
-    print(f"\n✓ Results saved to {output_dir}/")
-    print(f"  - {event_id}_description.txt")
-    print(f"  - {event_id}_metadata.json")
-
+    print(f"  ✓ Loaded {len(combined_df):,} records, {combined_df['id'].nunique():,} unique IDs")
+    
+    return combined_df
 
 def main():
     """Main validation workflow."""
     
-    print("=" * 60)
-    print("Near-Miss VLM Validation")
-    print("=" * 60)
-    print(f"\nValidating pair: {id1} vs {id2}")
+    print("=" * 70)
+    print("Near-Miss VLM Validation - Brussels Day", day)
+    print("=" * 70)
+    print(f"\nCSV: {csv_path}")
+    print(f"Data: {base_data}/2025-06-{day}-XX/")
+    print(f"Output: {output_dir}")
     
-    # Step 1: Load event data from CSV
-    print("\n[1/4] Loading event data from CSV...")
-    try:
-        event_data = find_event_in_csv(csv_path, id1, id2)
-        print(f"✓ Found event: {event_data['interaction']} in {event_data['zone']}")
-        print(f"  TTC: {event_data['TTC']:.2f}s, MDRAC: {event_data['MDRAC']:.2f} m/s²")
-    except Exception as e:
-        print(f"✗ Error loading event data: {e}")
+    # Verify CSV exists
+    if not Path(csv_path).exists():
+        print(f"\n✗ Error: CSV not found: {csv_path}")
         return
     
-    # Step 2: Find trajectory plot
-    print("\n[2/4] Finding trajectory plot...")
+    # Load trajectory data
     try:
-        plot_path = find_plot_file(plots_path, id1, id2)
-        print(f"✓ Found plot: {Path(plot_path).name}")
+        data_df = load_trajectory_data(csv_path, base_data)
     except Exception as e:
-        print(f"✗ Error finding plot: {e}")
-        return
-    
-    # Step 3: VLM Validation
-    print("\n[3/4] Running VLM validation...")
-    try:
-        from vlm_backend import validate_event
-        validation_result = validate_event(plot_path, event_data)
-        print(f"✓ Validation complete: {validation_result['classification']}")
-        print(f"  Confidence: {validation_result['confidence']}%")
-        print(f"  Backend: {validation_result['backend']}")
-    except Exception as e:
-        print(f"✗ Error during VLM validation: {e}")
+        print(f"✗ Error loading data: {e}")
         import traceback
         traceback.print_exc()
         return
     
-    # Step 4: Save results
-    print("\n[4/4] Saving results...")
+    # Run validation
+    print(f"\n[2/3] Running VLM validation...")
+    print("  Mode: Auto-detect all pairs from CSV")
+    
     try:
-        save_results(output_path, event_data, validation_result)
-        print("\n" + "=" * 60)
-        print("Validation completed successfully!")
-        print("=" * 60)
+        from vlm.batch_validator import validate_pairs_batch
+        
+        results_df = validate_pairs_batch(
+            csv_path=csv_path,
+            data_df=data_df,
+            pairs=None,  # Auto-detect all
+            output_dir=output_dir
+        )
+        
+        print(f"\n✓ Validation complete!")
+        successful = results_df[results_df['classification'] != 'error']
+        print(f"  Successful: {len(successful)}/{len(results_df)}")
+        
     except Exception as e:
-        print(f"✗ Error saving results: {e}")
+        print(f"✗ Error during validation: {e}")
+        import traceback
+        traceback.print_exc()
         return
-
+    
+    # Display summary
+    print(f"\n[3/3] Results Summary")
+    print('='*70)
+    print(f"\nSaved to: {output_dir}/")
+    print("\nClassification breakdown:")
+    print(results_df['classification'].value_counts().to_string())
+    
+    if len(successful) > 0:
+        print(f"\nConfidence statistics:")
+        print(f"  Mean: {successful['confidence'].mean():.1f}%")
+        print(f"  Median: {successful['confidence'].median():.1f}%")
+    
+    print("\n" + "=" * 70)
+    print("✓ Validation completed!")
+    print("=" * 70)
 
 if __name__ == "__main__":
     main()

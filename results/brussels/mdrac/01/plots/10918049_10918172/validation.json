@@ -1,0 +1,18 @@
+{
+  "id1": 10918049,
+  "id2": 10918172,
+  "timestamp": "2025-06-01 17:50:13.545931101",
+  "zone": "D-L1",
+  "interaction": "car_v_car",
+  "MDRAC": 23.88009885445072,
+  "TTC": 0.6382026,
+  "dist": 7.350396,
+  "closing_speed": 11.51734,
+  "speed_diff": 6.378749,
+  "yaw_diff": 167.89967,
+  "classification": "confirmed_near_miss",
+  "confidence": 100,
+  "reasoning": "The trajectory plot shows the two vehicles converging dramatically to an extremely close minimum distance of 1.98m, indicating a direct conflict path. This proximity is confirmed by the distance over time plot, which rapidly decreases to 1.98m, coinciding with a high closing speed peaking around 11.52 m/s before the vehicles quickly separate. Neither velocity profile shows significant braking at the critical moment, suggesting little evasive action was taken. The critically low TTC of 0.64s and the exceptionally high MDRAC of 23.88 m/s\u00b2 unequivocally point to an imminent collision that would have been impossible to avoid through deceleration alone. The yaw difference of 167.90\u00b0 strongly indicates a near head-on passing conflict. Therefore, given the extremely close minimum distance, high closing speed, and severe risk metrics, this event is a confirmed near-miss.",
+  "backend": "gemini-2.5-flash",
+  "plot_path": "/home/ubuntu/prem/results/brussels/mdrac/01/plots/10918049_10918172/combined_analysis.png"
+}

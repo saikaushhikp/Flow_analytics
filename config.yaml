@@ -1,12 +1,4 @@
-# =============================================================================
-# PREM (Proactive Road Event Monitoring) Configuration
-# =============================================================================
-# Complete configuration file for traffic safety analysis
-# Regions: Brussels, Oulu
-
-# =============================================================================
 # DATA LOADING
-# =============================================================================
 data:
   # Optimized dtypes for memory efficiency
   dtypes:
@@ -27,9 +19,8 @@ data:
   
   chunk_size: 500000  # Rows per chunk for large datasets
 
-# =============================================================================
+
 # PREPROCESSING FILTERS
-# =============================================================================
 preprocessing:
   # Lifetime Filter - removes short-lived detections (noise/false positives)
   lifetime_filter:
@@ -78,9 +69,8 @@ preprocessing:
     enabled: true
     buffer: 0.5  # meters - safety buffer for overlap check
 
-# =============================================================================
+
 # SSM PAIR GENERATION FILTERS
-# =============================================================================
 filters:
   # Vehicle type filter - which vehicle types to analyze
   vehicle_labels: [4, 6, 7, 8]  # car, van, truck, bus
@@ -95,9 +85,8 @@ filters:
   min_closing_speed: 1.0     # m/s - minimum rate of gap closure
   min_speed_diff: 0.5        # m/s - follower must be faster than leader
 
-# =============================================================================
+
 # M-DRAC (Modified Deceleration Rate to Avoid Crash)
-# =============================================================================
 mdrac:
   # Perception-Reaction Time by vehicle type (seconds)
   prt:
@@ -117,10 +106,6 @@ mdrac:
   severity:
     moderate: 5.0  # m/s² - moderate severity threshold
     severe: 7.0    # m/s² - severe severity threshold
-    # normal: min_mdrac to moderate
-    # moderate: moderate to severe  
-    # severe: severe to infinity
-    # critical: infinity (TTC <= PRT, unavoidable)
   
   # Adaptive M-DRAC parameters
   closing_accel_threshold: -0.5  # m/s² - threshold for active response detection
@@ -134,9 +119,8 @@ mdrac:
   yaw_diff_rate_threshold: 15.0      # deg/s - yaw rate threshold
   longitudinal_yaw_threshold: 30.0   # degrees - threshold to classify as longitudinal
 
-# =============================================================================
+
 # SPF (Safety Potential Field)
-# =============================================================================
 spf:
   # Field parameters
   beta_p: 0.5  # Physical field weight
@@ -150,13 +134,9 @@ spf:
   severity:
     moderate: 0.2  # moderate severity threshold
     severe: 0.4    # severe severity threshold
-    # normal: min_spf to moderate
-    # moderate: moderate to severe
-    # severe: severe to 1.0
 
-# =============================================================================
+
 # POSTPROCESSING FILTERS
-# =============================================================================
 postprocessing:
   # Teleportation Filter - removes unrealistic position jumps
   teleportation_filter:
@@ -168,9 +148,8 @@ postprocessing:
     enabled: true
     min_sustained_frames: 3  # minimum frames for valid conflict
 
-# =============================================================================
+
 # PROCESSING OPTIONS
-# =============================================================================
 processing:
   verbose: true        # print detailed logs
   batch_size: 20000    # batch size for pair generation
@@ -179,29 +158,32 @@ processing:
   # Zone assignment
   zone_batch_size: 100000  # batch size for spatial joins
 
-# =============================================================================
 # VISUALIZATION
-# =============================================================================
 visualization:
   plot_conflicts: false       # generate trajectory plots for conflicts
   max_plots: 100             # maximum number of plots to generate
   plot_format: 'png'         # output format (png, pdf, svg)
   dpi: 150                   # plot resolution
 
-# =============================================================================
+
 # VLM VALIDATION
-# =============================================================================
 vlm:
   # Primary backend
   primary_backend: "gemini"  # "gemini" or "local"
   
   # Gemini API settings (free tier: 1500 requests/day)
   gemini:
-    model: "gemini-2.5-flash"
+    model: "gemini-2.5-flash"  # Updated: gemini-1.5-flash deprecated
     api_key_env: "GEMINI_API_KEY"  # Read from environment variable
     max_retries: 3
     timeout: 30  # seconds
     rate_limit_delay: 1  # seconds between requests
+  
+  
+  # Paths configuration (auto-constructed from day parameter)
+  paths:
+    base_results: "/home/ubuntu/prem/results/brussels/mdrac"
+    base_data: "/home/ubuntu/data/uploads/objects/clean"
   
   # Local model fallback
   local:
@@ -216,9 +198,8 @@ vlm:
   save_plots: true          # Save trajectory plots
   plot_dpi: 150
 
-# =============================================================================
+
 # OUTPUT
-# =============================================================================
 output:
   save_format: 'csv'         # csv or xlsx
   include_metadata: true     # include detection metadata

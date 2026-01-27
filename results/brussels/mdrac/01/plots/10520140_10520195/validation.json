@@ -1,0 +1,18 @@
+{
+  "id1": 10520140,
+  "id2": 10520195,
+  "timestamp": "2025-06-01 09:06:29.673084021",
+  "zone": "C-L1",
+  "interaction": "car_v_car",
+  "MDRAC": 7.31471234611952,
+  "TTC": 1.1010932,
+  "dist": 4.5098267,
+  "closing_speed": 4.0957723,
+  "speed_diff": 4.4595356,
+  "yaw_diff": 2.0143046,
+  "classification": "confirmed_near_miss",
+  "confidence": 95,
+  "reasoning": "The trajectory plot clearly shows vehicles 10520140 and 10520195 converging and crossing paths, reaching an extremely close minimum distance of 2.49m, as consistently indicated across the trajectory and distance over time plots. This severe proximity is corroborated by the high MDRAC of 7.31 m/s\u00b2 and a critical TTC of 1.10s, signifying that a collision was narrowly avoided through significant driver action. The closing speed plot shows a rapid approach followed by a swift transition to separation, while velocity profiles indicate speed adjustments around the point of closest approach. Based on the yaw difference being approximately 10-15 degrees (within the longitudinal threshold) at the minimum distance, this event is classified as a severe rear-end type conflict.",
+  "backend": "gemini-2.5-flash",
+  "plot_path": "/home/ubuntu/prem/results/brussels/mdrac/01/plots/10520140_10520195/combined_analysis.png"
+}
