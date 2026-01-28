@@ -78,7 +78,7 @@ filters:
   # Basic motion filters
   min_vehicle_speed: 1.5     # m/s - filters stationary/parking vehicles
   max_distance: 8.0          # m - maximum distance between vehicles to consider
-  max_lateral_distance: 3.0  # m - maximum perpendicular distance (same lane check)
+  max_lateral_distance: 1.5  # m - maximum perpendicular distance (same lane check) - reduced from 3.0 to avoid parallel high-speed false positives
   
   # Conflict detection filters
   max_ttc: 1.8               # seconds - Time-To-Collision threshold
