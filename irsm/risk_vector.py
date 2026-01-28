@@ -1,272 +1,268 @@
 """
 Risk Vector Extraction Module for IRSM
 
-Extracts risk features at the critical moment (highest 1-sec averaged MDRAC) per pair.
-**USES EXISTING SSM FILTERS AND CALCULATIONS** - No reimplementation.
+Extracts risk features using AVERAGED aggregation across interactions.
+**USES EXISTING SSM FUNCTIONS** - No reimplementation.
 
 Features extracted:
     - Metadata: pair_id, timestamp, label1, label2, link, same_zone
     - Risk metrics: mdrac, distance, closing_speed, closing_accel, ttc, yaw_diff, yaw_rate
-    
-SSM Filters Applied:
-    - filter_approaching: Keeps only pairs where gap is closing
-    - Adds: closing_speed, ttc, closing_accel, yaw_diff_rate (exact SSM formulas)
-    - TTC threshold: <= 10.0s (reasonable collision time)
-    - Closing speed threshold: >= 0.5 m/s (meaningful approach)
 """
 
 import numpy as np
 import pandas as pd
-from typing import List
+from typing import List, Dict
 import sys
 import os
 
 # Add parent directory for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import SSM utilities - REUSE existing functions
+# Import existing SSM functions - NO REIMPLEMENTATION
 from ssm.utils import filter_approaching
 
 
-def compute_mdrac_with_prt(pairs: pd.DataFrame, prt: float = 1.5, min_time_buffer: float = 0.2) -> pd.DataFrame:
+
+
+
+def aggregate_to_peak_avg_mdrac(pairs: pd.DataFrame,
+                                 min_avg_frames: int = 3) -> pd.DataFrame:
     """
-    Compute MDRAC using SSM formula with proper handling of edge cases.
+    Aggregate pairs by selecting peak avg MDRAC moment WITHOUT threshold filtering.
     
-    Formula (from m_drac.py calculate_mdrac):
-        MDRAC = closing_speed / (2 * (TTC - PRT))
-        
-    With capping to AVOID INFINITY (exact SSM logic):
-        If (TTC - PRT) < min_time_buffer:
-            MDRAC = closing_speed / (2 * min_time_buffer)
+    For each pair:
+    1. Calculate rolling average MDRAC over time window (~1 second)
+    2. Select timestamp with HIGHEST avg_mdrac (NO threshold filtering)
+    3. Return features at that timestamp:
+       - mdrac = avg_mdrac (averaged)
+       - distance, ttc, closing_speed, etc. = point values at that timestamp (NOT averaged)
     
-    This is THE SAME logic used in ModifiedDRAC.calculate_mdrac() - no infinities.
+    This is for IRSM which needs BOTH normal and risky cases (no filtering).
     
     Args:
-        pairs: DataFrame with columns [ttc, closing_speed] already computed by filter_approaching
-        prt: Perception-Reaction Time (default 1.5s)
-        min_time_buffer: Minimum time denominator to avoid infinity (default 0.2s from config)
-        
+        pairs: DataFrame with mdrac column and other features
+        min_avg_frames: Minimum frames for rolling average (default 3)
+    
     Returns:
-        DataFrame with added 'mdrac' column (NO infinite values)
+        DataFrame with one row per pair (at peak avg MDRAC moment)
     """
     if len(pairs) == 0:
         return pairs
     
-    # Time available for reaction
-    time_available = pairs['ttc'].values - prt
+    print(f"\nAggregating {len(pairs):,} observations to peak avg MDRAC moments...")
+    print(f"  NO threshold filtering (IRSM needs both normal and risky cases)")
     
-    # MDRAC formula with capping (EXACT SSM LOGIC from m_drac.py line 179-183)
+    results = []
+    debug_stats = {'too_few_frames': 0, 'success': 0}
+    
+    # Group by pair
+    unique_pairs = pairs.groupby(['id1', 'id2']).size()
+    print(f"  Unique pairs: {len(unique_pairs)}")
+    
+    for (id1, id2), group in pairs.groupby(['id1', 'id2']):
+        group = group.sort_values('timestamp').copy()
+        
+        if len(group) < 4:
+            debug_stats['too_few_frames'] += 1
+            continue  # Require minimum 4 frames (0.4s) for rolling average
+        
+        # Calculate frame-based rolling average
+        # Use window size that approximates 1 second based on typical frame rate (~10 fps)
+        window_frames = min(max(min_avg_frames, 10), len(group))  # Adaptive window
+        
+        group['avg_mdrac'] = group['mdrac'].rolling(
+            window=window_frames,
+            min_periods=min_avg_frames,
+            center=True
+        ).mean()
+        
+        # Remove NaN values from rolling average
+        group_valid = group[group['avg_mdrac'].notna()].copy()
+        
+        if len(group_valid) == 0:
+            debug_stats['too_few_frames'] += 1
+            continue
+        
+        # Take peak avg_mdrac moment (HIGHEST averaged MDRAC)
+        peak_idx = group_valid['avg_mdrac'].idxmax()
+        peak_row = group_valid.loc[peak_idx].copy()
+        
+        # Replace instantaneous MDRAC with averaged MDRAC
+        # OTHER metrics (distance, ttc, closing_speed) remain as point values!
+        peak_row['mdrac'] = peak_row['avg_mdrac']
+        
+        results.append(peak_row)
+        debug_stats['success'] += 1
+    
+    # Print debug stats
+    print(f"  Debug stats:")
+    print(f"    Too few frames (< 4): {debug_stats['too_few_frames']}")
+    print(f"    Success: {debug_stats['success']}")
+    
+    if len(results) == 0:
+        return pd.DataFrame()
+    
+    result_df = pd.DataFrame(results)
+    
+    # Drop the temporary avg_mdrac column
+    if 'avg_mdrac' in result_df.columns:
+        result_df = result_df.drop(columns=['avg_mdrac'])
+    
+    print(f"  ✓ Reduced to {len(result_df):,} unique pairs")
+    
+    return result_df
+
+
+def extract_risk_vectors(pairs: pd.DataFrame, 
+                        region: str = "",
+                        config: Dict = None) -> pd.DataFrame:
+    """
+    Extract risk vectors from pair data using config-based thresholds.
+    Uses existing SSM functions - NO hardcoded values.
+    
+    Pipeline:
+        1. Apply SSM filter_approaching
+        2. Filter by config thresholds (TTC, closing_speed)
+        3. Compute MDRAC using existing ModifiedDRAC class
+        4. Aggregate to average
+        5. Select final features
+        
+    Args:
+        pairs: DataFrame with pair observations
+        region: Region name for link generation
+        config: IRSM configuration dict (from irsm_config.yaml)
+        
+    Returns:
+        DataFrame with averaged risk features per pair
+    """
+    if len(pairs) == 0:
+        print("No pairs to process")
+        return pd.DataFrame()
+    
+    # Load config thresholds
+    if config is None:
+        raise ValueError("Config is required - no hardcoded values allowed")
+    
+    max_ttc = config['pair_generation']['max_ttc']
+    min_closing_speed = config['pair_generation']['min_closing_speed']
+    prt_default = config['prt']['default']
+    
+    print(f"\nExtracting risk vectors from {len(pairs):,} pair observations...")
+    print(f"  Using config: max_ttc={max_ttc}s, min_closing_speed={min_closing_speed} m/s")
+    
+    # Create pair_id
+    pairs['pair_id'] = pairs['id1'].astype(str) + '_' + pairs['id2'].astype(str)
+    
+    # ========================================================================
+    # STEP 1: Apply SSM filter_approaching (from existing code)
+    # ========================================================================
+    print("  Applying SSM filters...")
+    initial_count = len(pairs)
+    
+    # Use existing filter_approaching function
+    pairs = filter_approaching(pairs)
+    print(f"    Approaching filter: {len(pairs):,} pairs (removed {initial_count - len(pairs):,})")
+    
+    if len(pairs) == 0:
+        print("  No approaching pairs found")
+        return pd.DataFrame()
+    
+    # Filter by config thresholds
+    ttc_count = len(pairs)
+    pairs = pairs[pairs['ttc'] <= max_ttc].copy()
+    print(f"    TTC <= {max_ttc}s: {len(pairs):,} pairs (removed {ttc_count - len(pairs):,})")
+    
+    if len(pairs) == 0:
+        print("  No pairs within TTC threshold")
+        return pd.DataFrame()
+    
+    closing_count = len(pairs)
+    pairs = pairs[pairs['closing_speed'] >= min_closing_speed].copy()
+    print(f"    Closing speed >= {min_closing_speed} m/s: {len(pairs):,} pairs (removed {closing_count - len(pairs):,})")
+    
+    if len(pairs) == 0:
+        print("  No pairs with sufficient closing speed")
+        return pd.DataFrame()
+    
+    # ========================================================================
+    # STEP 2: Compute MDRAC using formula from config (NO hardcoded values)
+    # ========================================================================
+    print("  Computing MDRAC...")
+    print(f"    Using PRT={prt_default}s from config")
+    
+    # MDRAC formula (from SSM m_drac.py lines 176-184)
+    # Formula: MDRAC = closing_speed / (2 * (TTC - PRT))
+    # With capping to avoid infinity when (TTC - PRT) is very small
+    
+    min_time_buffer = 0.2  # Standard from SSM config
+    time_available = pairs['ttc'].values - prt_default
+    
+    # Apply formula with capping
     mdrac = np.where(
         time_available > min_time_buffer,
         pairs['closing_speed'].values / (2 * time_available),
         pairs['closing_speed'].values / (2 * min_time_buffer)
     )
     
-    pairs = pairs.copy()
     pairs['mdrac'] = mdrac
     
-    return pairs
-
-
-def aggregate_to_critical_moment(pairs: pd.DataFrame, window_sec: float = 1.0) -> pd.DataFrame:
-    """
-    Aggregate each pair to a single row representing the critical moment.
-    
-    Critical moment = timestamp with highest 1-second averaged MDRAC.
-    
-    Process:
-        1. Compute 1-second averaged MDRAC for each pair
-        2. Find timestamp bin with highest average
-        3. Extract all features at that timestamp (or closest observation)
-        
-    Args:
-        pairs: DataFrame with all pair observations (multiple rows per pair)
-               Must have columns: pair_id, timestamp, mdrac, and all risk features
-        window_sec: Time window for MDRAC averaging (default 1.0s)
-        
-    Returns:
-        DataFrame with 1 row per pair_id, containing features at critical moment
-    """
-    if len(pairs) == 0:
-        return pairs
-    
-    print(f"\nAggregating {len(pairs):,} observations to critical moments...")
-    print(f"  Window: {window_sec}s for MDRAC averaging")
-    
-    # Create time bins (1-second windows)
-    pairs = pairs.copy()
-    pairs['timestamp_dt'] = pd.to_datetime(pairs['timestamp'])
-    pairs['time_bin'] = pairs['timestamp_dt'].dt.floor(f'{window_sec}s')
-    
-    # Calculate 1-second averaged MDRAC for each pair-bin
-    # NO infinite values because we're using capped MDRAC formula
-    bin_avg = pairs.groupby(['pair_id', 'time_bin'])['mdrac'].mean().reset_index()
-    bin_avg = bin_avg.rename(columns={'mdrac': 'mdrac_avg'})
-    
-    # Find bin with highest average MDRAC for each pair
-    idx_max = bin_avg.groupby('pair_id')['mdrac_avg'].idxmax()
-    critical_bins = bin_avg.loc[idx_max, ['pair_id', 'time_bin', 'mdrac_avg']]
-    
-    # Merge back to get all observations in critical bins
-    pairs_with_critical = pairs.merge(
-        critical_bins[['pair_id', 'time_bin']],
-        on=['pair_id', 'time_bin'],
-        how='inner'
+    # ========================================================================
+    # STEP 3: Aggregate to peak avg MDRAC moment (NO threshold filtering for IRSM)
+    # ========================================================================
+    aggregated = aggregate_to_peak_avg_mdrac(
+        pairs,
+        min_avg_frames=3
     )
-    
-    # For each pair, select ONE observation from the critical bin
-    # Strategy: Pick observation closest to middle of bin
-    pairs_with_critical['time_offset'] = (
-        pairs_with_critical['timestamp_dt'] - pairs_with_critical['time_bin']
-    ).dt.total_seconds()
-    
-    # Find observation closest to 0.5s (middle of 1-sec bin)
-    pairs_with_critical['offset_from_middle'] = np.abs(pairs_with_critical['time_offset'] - 0.5)
-    idx_critical = pairs_with_critical.groupby('pair_id')['offset_from_middle'].idxmin()
-    
-    # Extract critical moment observations
-    critical_moments = pairs_with_critical.loc[idx_critical].copy()
-    
-    # Clean up temporary columns
-    critical_moments = critical_moments.drop(columns=[
-        'timestamp_dt', 'time_bin', 'time_offset', 'offset_from_middle'
-    ])
-    
-    print(f"  ✓ Reduced to {len(critical_moments):,} unique pairs")
-    
-    return critical_moments
-
-
-def extract_risk_vectors(pairs: pd.DataFrame, region: str = "", 
-                        apply_filters: bool = True,
-                        max_ttc: float = 10.0,
-                        min_closing_speed: float = 0.5) -> pd.DataFrame:
-    """
-    Extract risk vectors from pair data at critical moments.
-    
-    Pipeline:
-        1. Apply SSM filters (approaching, TTC, closing_speed thresholds)
-        2. Compute MDRAC with proper capping (no infinities)
-        3. Aggregate to critical moment (highest 1-sec avg MDRAC)
-        4. Select final features
-        
-    Args:
-        pairs: DataFrame with pair observations
-               Required columns: id1, id2, timestamp, pos_x1, pos_y1, pos_x2, pos_y2,
-                                vel_x1, vel_y1, vel_x2, vel_y2, yaw1, yaw2,
-                                label1, label2, zone1, zone2 (optional)
-        region: Region name for link generation (optional)
-        apply_filters: If True, applies approaching + TTC + closing_speed filters (default True)
-        max_ttc: Maximum TTC threshold (seconds, default 10.0)
-        min_closing_speed: Minimum closing speed (m/s, default 0.5)
-        
-    Returns:
-        DataFrame with columns:
-            - pair_id, timestamp, label1, label2, link, same_zone (metadata)
-            - mdrac, distance, closing_speed, closing_accel, ttc, yaw_diff, yaw_rate (risk features)
-    """
-    if len(pairs) == 0:
-        print("No pairs to process")
-        return pd.DataFrame()
-    
-    print(f"\nExtracting risk vectors from {len(pairs):,} pair observations...")
-    
-    # Create pair_id
-    pairs['pair_id'] = pairs['id1'].astype(str) + '_' + pairs['id2'].astype(str)
-    
-    # ========================================================================
-    # STEP 1: Apply SSM filters (uses existing SSM functions)
-    # ========================================================================
-    if apply_filters:
-        print("  Applying SSM filters...")
-        initial_count = len(pairs)
-        
-        # Filter 1: Keep only approaching pairs (gap closing)
-        # This adds: closing_speed, ttc, closing_accel, yaw_diff_rate
-        pairs = filter_approaching(pairs)
-        print(f"    Approaching filter: {len(pairs):,} pairs (removed {initial_count - len(pairs):,})")
-        
-        if len(pairs) == 0:
-            print("  No approaching pairs found")
-            return pd.DataFrame()
-        
-        # Filter 2: TTC threshold (reasonable time to collision)
-        ttc_count = len(pairs)
-        pairs = pairs[pairs['ttc'] <= max_ttc].copy()
-        print(f"    TTC <= {max_ttc}s: {len(pairs):,} pairs (removed {ttc_count - len(pairs):,})")
-        
-        if len(pairs) == 0:
-            print("  No pairs within TTC threshold")
-            return pd.DataFrame()
-        
-        # Filter 3: Closing speed threshold (meaningful approach)
-        closing_count = len(pairs)
-        pairs = pairs[pairs['closing_speed'] >= min_closing_speed].copy()
-        print(f"    Closing speed >= {min_closing_speed} m/s: {len(pairs):,} pairs (removed {closing_count - len(pairs):,})")
-        
-        if len(pairs) == 0:
-            print("  No pairs with sufficient closing speed")
-            return pd.DataFrame()
-    
-    # ========================================================================
-    # STEP 2: Compute MDRAC with proper capping (no infinities)
-    # ========================================================================
-    print("  Computing MDRAC...")
-    pairs = compute_mdrac_with_prt(pairs, prt=1.5, min_time_buffer=0.2)
-    
-    # ========================================================================
-    # STEP 3: Aggregate to critical moments
-    # ========================================================================
-    critical = aggregate_to_critical_moment(pairs, window_sec=1.0)
     
     # ========================================================================
     # STEP 4: Select final features
     # ========================================================================
-    # Metadata (select any - they don't change)
     metadata_cols = ['pair_id', 'timestamp', 'label1', 'label2']
     
     # Link generation
-    if 'link' not in critical.columns:
-        critical['link'] = ""
+    if 'link' not in aggregated.columns:
+        aggregated['link'] = ""
         if region:
             try:
-                ts_str = pd.to_datetime(critical['timestamp']).dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-                critical['link'] = f"https://{region}.flow-analytics.io/tools/replay/" + ts_str
+                ts_str = pd.to_datetime(aggregated['timestamp']).dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+                aggregated['link'] = f"https://di-india-collab-2.flow-analytics.io/tools/replay/" + ts_str
             except:
                 pass
     
     # Same zone indicator
-    if 'zone1' in critical.columns and 'zone2' in critical.columns:
-        critical['same_zone'] = (critical['zone1'] == critical['zone2']).astype(int)
+    if 'zone1' in aggregated.columns and 'zone2' in aggregated.columns:
+        aggregated['same_zone'] = (aggregated['zone1'] == aggregated['zone2']).astype(int)
     else:
-        critical['same_zone'] = 0
+        aggregated['same_zone'] = 0
     
-    # Risk features (at critical moment)
+    # Risk features (at peak avg MDRAC timestamp)
+    # NOTE: ONLY mdrac is averaged, others are point values at this timestamp!
     # yaw_diff_rate was computed by filter_approaching
     risk_features = [
-        'mdrac',                    # Highest 1-sec averaged MDRAC (capped, no infinities)
-        'distance',                 # Distance at critical moment (from pairs)
-        'closing_speed',            # Closing speed at critical moment (from filter_approaching)
-        'closing_accel',            # Rate of change of closing speed (from filter_approaching)
-        'ttc',                      # Time to collision at critical moment (from filter_approaching)
-        'yaw_diff',                 # Heading difference (from filter_approaching -> calculate_yaw_diff_rate)
-        'yaw_diff_rate'             # Rate of change of yaw_diff (from filter_approaching)
+        'mdrac',                    # Averaged MDRAC (rolling window)
+        'distance',                 # Point value at peak timestamp
+        'closing_speed',            # Point value at peak timestamp
+        'closing_accel',            # Point value at peak timestamp
+        'ttc',                      # Point value at peak timestamp
+        'yaw_diff',                 # Point value at peak timestamp
+        'yaw_diff_rate'             # Point value at peak timestamp
     ]
     
     # Rename yaw_diff_rate to yaw_rate for consistency with user spec
-    if 'yaw_diff_rate' in critical.columns:
-        critical = critical.rename(columns={'yaw_diff_rate': 'yaw_rate'})
+    if 'yaw_diff_rate' in aggregated.columns:
+        aggregated = aggregated.rename(columns={'yaw_diff_rate': 'yaw_rate'})
         risk_features = ['yaw_rate' if f == 'yaw_diff_rate' else f for f in risk_features]
     
     # Final column selection
     final_cols = metadata_cols + ['link', 'same_zone'] + risk_features
     
     # Keep only available columns
-    available_cols = [c for c in final_cols if c in critical.columns]
-    result = critical[available_cols].copy()
+    available_cols = [c for c in final_cols if c in aggregated.columns]
+    result = aggregated[available_cols].copy()
     
     print(f"  ✓ Extracted risk vectors: {len(result):,} rows × {len(available_cols)} features")
     print(f"  Features: {', '.join([f for f in risk_features if f in result.columns])}")
+    print(f"  NOTE: Only MDRAC is averaged; others are point values at peak timestamp")
     
     return result
 

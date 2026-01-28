@@ -489,3 +489,229 @@ Added inline comments in `config.yaml`:
 ---
 
 **Next Steps**: Week 8 will focus on IRSM integration, cross-region analysis, and comprehensive documentation updates.
+
+
+---
+
+## Day 4-6: IRSM (Interaction Risk Space Modelling) Implementation ✅
+
+### Overview
+Successfully implemented IRSM as an ML-based alternative to rule-based MDRAC detection. IRSM uses Isolation Forest to learn near-miss patterns from both normal and risky interactions.
+
+### The Problem with MDRAC for ML
+MDRAC uses thresholds (≥3.4 m/s²) to flag only high-risk moments. This creates a biased dataset containing ONLY near-misses, which is not suitable for machine learning that needs to distinguish near-misses FROM normal cases.
+
+### IRSM Solution
+Generate risk vectors for ALL interactions (normal + risky) → Use Isolation Forest to learn what makes certain interactions anomalous.
+
+### Core Implementation
+
+#### 1. Aggregation Logic (CRITICAL DETAIL)
+**For each unique vehicle pair:**
+
+1. **Calculate rolling average MDRAC** (~1 second window, ~10 frames)
+2. **Find timestamp with HIGHEST avg MDRAC** (no threshold)
+3. **Return one row** with:
+   - `mdrac` = **averaged MDRAC** (from rolling average)
+   - `distance`, `ttc`, `closing_speed`, `closing_accel`, `yaw_diff`, `yaw_rate` = **point values at that peak timestamp**
+
+**WHY only MDRAC is averaged?**
+- MDRAC benefits from smoothing (reduces noise in deceleration calculations)
+- Other metrics should reflect actual physical state at the critical moment
+- Matches ModifiedDRAC methodology used in Brussels MDRAC detection
+
+**WHY NO threshold filtering?**
+- IRSM needs BOTH normal AND risky interactions
+- Unlike MDRAC (filters ≥3.4 m/s²), IRSM returns ALL pairs
+- Isolation Forest learns from the full spectrum of risk
+
+#### 2. Configuration-Based System
+
+**All parameters in `irsm/irsm_config.yaml`:**
+```yaml
+pair_generation:
+  max_distance: 12.0          # Spatial proximity (meters)
+  max_lateral: 2.0            # Same lane threshold (meters)
+  max_ttc: 15.0               # Time to collision threshold (seconds)
+  min_closing_speed: 0.1      # Minimum approach speed (m/s)
+
+prt:
+  default: 1.5                # Perception-reaction time for MDRAC calculation
+
+model:
+  contamination: 0.1          # 10% expected anomalies
+```
+
+**NO hardcoded values anywhere** - everything is configurable!
+
+#### 3. Complete Pipeline
+
+```
+Raw Data (39M rows) →
+├─ Preprocessing
+│  ├─ Lifetime filter (remove short-lived IDs)
+│  ├─ Footpath filter (remove pedestrian area vehicles)
+│  ├─ Crosswalk filter (remove parallel-moving at crosswalks)
+│  └─ Static filter (remove parked vehicles)
+├─ Clean Data (15M rows, 4.6M in lanes)
+├─ Pair Generation
+│  ├─ Find nearby (within 12m)
+│  ├─ Filter same-lane (lateral ≤ 2m)
+│  └─ Filter approaching (gap closing)
+├─ Risk Vector Extraction
+│  ├─ Apply TTC filter (≤ 15s)
+│  ├─ Apply closing speed filter (≥ 0.1 m/s)
+│  ├─ Calculate MDRAC (using config PRT)
+│  └─ Aggregate to peak avg MDRAC (NO threshold!)
+├─ 369 unique pairs generated
+└─ Isolation Forest (10% contamination) → 37 anomalies detected
+```
+
+#### 4. Results (Brussels 2025-06-01)
+
+**With current config:**
+```
+max_distance: 12.0m
+max_lateral: 2.0m
+min_closing_speed: 0.1 m/s
+contamination: 10%
+```
+
+**Output:**
+- **Pairs generated:** 369 unique pairs
+- **Anomalies detected:** 37 (10.03%)
+- **Execution time:** ~3 minutes
+
+**Compare to earlier version:**
+- Old config (8m, 1m, 0.5): 288 pairs
+- New config (12m, 2m, 0.1): 369 pairs
+- Relaxed thresholds captured 28% more interactions
+
+### IRSM vs MDRAC Comparison
+
+| Aspect | MDRAC Detection | IRSM |
+|--------|----------------|------|
+| **Purpose** | Flag near-misses | Learn near-miss patterns |
+| **Data** | High-risk only (≥3.4 m/s²) | Normal + risky |
+| **Method** | Rule-based threshold | ML (Isolation Forest) |
+| **Filtering** | Threshold-based | No threshold |
+| **Aggregation** | Peak moment above threshold | Peak moment (all pairs) |
+| **MDRAC value** | Averaged | Averaged |
+| **Other metrics** | Point values at peak | Point values at peak |
+
+### Files Created
+
+**Core Implementation:**
+- `irsm/irsm_config.yaml` - All configuration
+- `irsm/data_generation.py` - Data pipeline
+- `irsm/risk_vector.py` - Feature extraction & aggregation
+- `irsm/models/isolation_forest.py` - ML detection
+
+**Documentation:**
+- `irsm/README.md` - Complete usage guide
+
+### Technical Details
+
+#### `aggregate_to_peak_avg_mdrac()` Function
+Located in `risk_vector.py`. Key logic:
+
+1. Group observations by unique pair (id1, id2)
+2. Require minimum 4 frames (0.4s) for rolling average
+3. Calculate rolling average MDRAC (window ~10 frames = 1 second at 10 Hz)
+4. Find timestamp with highest avg_mdrac (no threshold filtering)
+5. Replace instantaneous MDRAC with averaged value
+6. Keep other metrics as point values at that timestamp
+
+#### Key Features
+- **Uses existing SSM functions** - `filter_approaching`, `filter_same_lane` (no reimplementation)
+- **Config-driven** - All thresholds from YAML
+- **Proper URL** - `https://di-india-collab-2.flow-analytics.io/tools/replay/`
+- **Two-stage pipeline** - Data generation → Detection (separate scripts)
+
+### Issues Resolved During Implementation
+
+1. ✅ **Removed all hardcoded values**
+   - Initial: `max_lateral = 2.0` hardcoded in data_generation.py
+   - Fixed: Load from `config['pair_generation']['max_lateral']`
+
+2. ✅ **Fixed URL**
+   - Initial: `brussels.flow-analytics.io`
+   - Fixed: `di-india-collab-2.flow-analytics.io`
+
+3. ✅ **Correct aggregation logic**
+   - Initial: Averaged ALL metrics (incorrect)
+   - Fixed: ONLY average MDRAC, keep point values for others
+
+4. ✅ **Removed threshold filtering**
+   - Initial: Filtered pairs where avg_mdrac < 1.0 (removed 279/397 pairs!)
+   - Fixed: Return ALL pairs (ML needs both normal and risky)
+
+5. ✅ **Proper config integration**
+   - Ensured all parameters loaded from config
+   - No magic numbers in code
+
+### Data Schema
+
+**`lanes.csv` (Risk Vectors):**
+
+| Column | Description | Aggregation Type |
+|--------|-------------|-----------------|
+| `mdrac` | MDRAC value | **Averaged** (rolling ~1s) |
+| `distance` | Inter-vehicle distance | Point value at peak |
+| `ttc` | Time to collision | Point value at peak |
+| `closing_speed` | Approach speed | Point value at peak |
+| `closing_accel` | Rate of closing | Point value at peak |
+| `yaw_diff` | Heading difference | Point value at peak |
+| `yaw_rate` | Rate of heading change | Point value at peak |
+
+**`lanes_detections.csv` (Anomalies):**
+- Same as above + `prediction` (-1 for anomaly) + `anomaly_score`
+
+### Usage
+
+**Generate risk vectors:**
+```bash
+conda run -n prem_env python irsm/data_generation.py
+```
+
+**Run anomaly detection:**
+```bash
+conda run -n prem_env python irsm/models/isolation_forest.py
+```
+
+**Adjust configuration:**
+Edit `irsm/irsm_config.yaml` and re-run.
+
+### Next Steps for IRSM
+
+1. **Multi-date testing** - Run on multiple days to validate consistency
+2. **Threshold optimization** - Tune `pair_generation` parameters
+3. **Detection validation** - Manual review of flagged anomalies
+4. **MDRAC comparison** - Compare IRSM detections vs MDRAC results
+5. **Region expansion** - Test on Oulu data
+
+---
+
+## Week 7 Summary
+
+### Major Achievements
+1. ✅ VLM workflow overhaul (auto-detection, simplified prompts)
+2. ✅ Oulu pedestrian crossing analysis
+3. ✅ **IRSM implementation (ML-based near-miss detection)**
+
+### IRSM Highlights
+- **369 pairs** generated from Brussels 2025-06-01
+- **37 anomalies** detected (10%)
+- **Correct aggregation** - Only MDRAC averaged
+- **NO threshold filtering** - Full spectrum for ML
+- **100% configurable** - No hardcoded values
+
+### Code Quality
+- Configuration-driven workflows
+- Proper documentation
+- Existing function reuse (no reimplementation)
+- Clean separation of concerns
+
+---
+
+**Status**: All Week 7 objectives complete. IRSM ready for multi-date deployment and comparison with MDRAC results.

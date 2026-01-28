@@ -1,143 +1,234 @@
-# IRSM (Intelligent Risk Scoring Mechanism)
+# IRSM (Interaction Risk Space Modelling)
 
-Unsupervised near-miss classification system using anomaly detection on risk feature vectors.
+**Unsupervised near-miss detection using Isolation Forest on interaction risk vectors.**
+
+## Overview
+
+IRSM models vehicular interactions to identify near-misses using machine learning. Unlike MDRAC (which flags high-risk moments), IRSM generates data containing BOTH near-misses AND normal interactions, then uses Isolation Forest to learn patterns that distinguish them.
+
+## Quick Start
+
+### 1. Configure Settings
+
+Edit `irsm/irsm_config.yaml`:
+```yaml
+region: 'brussels'
+date: '2025-06-01'
+
+pair_generation:
+  max_distance: 12.0          # How close vehicles must be (meters)
+  max_lateral: 2.0            # Max side distance for "same lane" (meters)
+  max_ttc: 15.0               # Max time to collision (seconds)
+  min_closing_speed: 0.1      # Min approach speed (m/s)
+  
+model:
+  contamination: 0.1          # Expected 10% anomalies
+```
+
+### 2. Generate Risk Vectors
+
+```bash
+conda run -n prem_env python irsm/data_generation.py
+```
+
+Output: `irsm/data/brussels/2025-06-01/lanes.csv` (~369 same-lane pairs)
+
+### 3. Run Detection
+
+```bash
+conda run -n prem_env python irsm/models/isolation_forest.py
+```
+
+Output: `irsm/results/brussels/2025-06-01/lanes_detections.csv` (~37 detections at 10%)
+
+## Pipeline Walkthrough
+
+### Step-by-Step Process:
+
+**1. Load Raw Data** → 39M trajectory rows from Brussels
+
+**2. Preprocessing** (clean the data):
+   - Remove short-lived vehicles (< 5 seconds)
+   - Remove pedestrian area vehicles
+   - Remove crossing pedestrians  
+   - Remove parked/static vehicles
+   - **Output:** ~15M clean rows
+
+**3. Zone Assignment** → Assign each vehicle to lane zones
+   - **Output:** ~4.6M rows in lanes
+
+**4. Pair Generation**:
+   - Find nearby pairs (within 12m)
+   - Filter same-lane (lateral distance ≤ 2m)
+   - Filter approaching (gap is closing)
+   - **Output:** Thousands of pair observations
+
+**5. Risk Vector Extraction**:
+   - Apply TTC filter (≤ 15s) and closing speed filter (≥ 0.1 m/s)
+   - Calculate MDRAC for each observation
+   - **Aggregate by pair** (key step):
+     - Calculate rolling average MDRAC (~1 second window)
+     - Select timestamp with **HIGHEST** avg MDRAC
+     - Return: `mdrac` = averaged; **other metrics = point values at that timestamp**
+   - **NO threshold filtering** (IRSM needs both normal and risky cases)
+   - **Output:** ~369 unique pairs
+
+**6. Isolation Forest** → Train on all pairs, detect top 10% anomalies
+
+## Configuration
+
+All settings in `irsm_config.yaml`:
+
+### Pair Generation
+```yaml
+pair_generation:
+  max_distance: 12.0          # Spatial proximity (meters)
+  max_lateral: 2.0            # Same lane threshold (meters)
+  max_ttc: 15.0               # TTC threshold (seconds)
+  min_closing_speed: 0.1      # Minimum approach speed (m/s)
+```
+
+### Vehicle-Specific PRT
+```yaml
+prt:
+  default: 1.5                # Seconds
+  car: 1.5
+  truck: 2.0
+  bus: 1.8
+  motorcycle: 1.3
+  bicycle: 1.0
+```
+
+### Model Settings
+```yaml
+model:
+  contamination: 0.1          # 10% expected anomalies
+  n_estimators: 100
+  random_state: 42
+```
+
+## Data Schema
+
+### lanes.csv (Risk Vectors)
+Each row = one unique vehicle pair at peak avg MDRAC moment
+
+**Columns:**
+- **Metadata:** `pair_id`, `timestamp`, `label1`, `label2`, `link`, `same_zone`
+- **Risk Features:**
+  - `mdrac` - **Averaged** MDRAC over ~1 second window
+  - `distance` - Point value at peak timestamp (meters)
+  - `closing_speed` - Point value at peak timestamp (m/s)
+  - `closing_accel` - Point value at peak timestamp (m/s²)
+  - `ttc` - Point value at peak timestamp (seconds)
+  - `yaw_diff` - Point value at peak timestamp (degrees)
+  - `yaw_rate` - Point value at peak timestamp (deg/s)
+
+### lanes_detections.csv (Anomalies)
+Same columns as above, plus:
+- `prediction` - -1 for anomaly, 1 for normal
+- `anomaly_score` - Isolation Forest score (lower = more anomalous)
+
+## Key Implementation Details
+
+### Aggregation Logic
+**For each unique pair:**
+1. Calculate rolling average MDRAC (~10 frames/~1 second)
+2. Find timestamp with HIGHEST avg MDRAC (no threshold)
+3. Replace `mdrac` with avg value
+4. Keep OTHER metrics as point values at that timestamp
+
+**Why only MDRAC is averaged?**
+- MDRAC benefits from averaging (smooths noise)
+- Other metrics (distance, TTC) should reflect actual state at critical moment
+- Matches ModifiedDRAC logic
+
+**Why no threshold filtering?**
+- IRSM learns from BOTH normal and risky interactions
+- Isolation Forest needs full spectrum for pattern recognition
+- MDRAC detection uses threshold (≥3.4), IRSM does not
+
+### IRSM vs MDRAC
+
+| Aspect | MDRAC Detection | IRSM |
+|--------|----------------|------|
+| **Purpose** | Flag near-misses | Learn patterns |
+| **Data** | Only high-risk (≥3.4 m/s²) | Normal + risky |
+| **Method** | Rule-based threshold | ML (Isolation Forest) |
+| **Aggregation** | Peak moment above threshold | Peak moment (no filter) |
+| **MDRAC value** | Averaged (same) | Averaged (same) |
+| **Other metrics** | Point values (same) | Point values (same) |
+
+## Example Results (Brussels 2025-06-01)
+
+**With current config:**
+```
+max_distance: 12.0m, max_lateral: 2.0m, min_closing_speed: 0.1 m/s
+
+Input:  39M rows
+        ↓ Preprocessing
+        15M rows → 4.6M in lanes
+        ↓ Pair generation (12m, 2m lateral)
+        Nearby → Same-lane → Approaching
+        ↓ Risk extraction (TTC ≤15s, speed ≥0.1)
+        369 unique pairs
+        ↓ Isolation Forest (10%)
+        37 anomalies detected
+```
+
+## Customization
+
+### Capture More Interactions
+```yaml
+pair_generation:
+  max_distance: 15.0          # Increase from 12m
+  max_ttc: 20.0               # Increase from 15s
+  min_closing_speed: 0.05     # Lower from 0.1
+```
+
+### Change Detection Rate
+```yaml
+model:
+  contamination: 0.05         # 5% instead of 10%
+```
 
 ## Directory Structure
 
 ```
 irsm/
-├── configuration.yaml       # All configuration (paths, features, models)
-├── data_generation.py       # Generate risk vectors from detections
-├── risk_vector.py           # Feature extraction logic
-├── main.py                  # Classification pipeline (to be implemented)
-├── data/                    # Generated risk vector datasets
-│   ├── brussels/
-│   │   └── YYYY-MM-DD.csv
-│   └── oulu/
-│       └── YYYY-MM-DD.csv
+├── irsm_config.yaml          # All configuration
+├── data_generation.py        # Generate same-lane pairs
+├── risk_vector.py            # Extract & aggregate features
 ├── models/
-│   └── isolation_forest.py  # Anomaly detection (to be implemented)
-└── utils/
-    └── __init__.py          # Helper functions
+│   └── isolation_forest.py  # Train & detect
+├── data/
+│   └── {region}/{date}/
+│       └── lanes.csv         # Generated risk vectors
+└── results/
+    └── {region}/{date}/
+        └── lanes_detections.csv  # Detected anomalies
 ```
 
-## Quick Start
+## Requirements
 
-### 1. Generate Risk Vectors
-
-Extract risk features from **raw trajectory data** (generates ALL potential nearby pairs):
-
-```bash
-# Single date - Brussels
-conda run -n prem_env python irsm/data_generation.py \
-  --region brussels \
-  --date 2025-06-01 \
-  --data-dir /data/uploads/brussels
-
-# Single date - Oulu
-conda run -n prem_env python irsm/data_generation.py \
-  --region oulu \
-  --date 2025-06-01 \
-  --data-dir /data/uploads/oulu_data
-```
-
-This will:
-1. Load raw vehicle trajectories for the date
-2. Extract ALL nearby pairs (using SSM's `find_all_nearby_pairs`)
-3. Compute instantaneous risk features for EACH row
-4. Save to `irsm/data/{region}/{date}.csv`
-
-### 2. Classify Near-Misses (Coming Soon)
-
-```bash
-# Run Isolation Forest on generated risk vectors
-conda run -n prem_env python irsm/main.py --region brussels --date 2025-06-01
-```
-
-## Data Schema
-
-### Input: Raw Trajectory Data
-```
-Parquet files in date-partitioned directories
-Columns: timestamp, id, label, pos_x, pos_y, vel, yaw, etc.
-```
-
-### Output: Risk Vector CSV
-```csv
-pair_id,timestamp,link,dist,closing_speed,speed_diff,vel1,vel2,yaw_diff,ttc,mdrac,...
-10520140_10520195,2025-06-01 09:06:29.673,https://...,4.51,4.10,4.46,12.5,8.1,2.01,1.10,7.31,...
-```
-
-**Columns:**
-- **Metadata:** `pair_id` (id1_id2), `timestamp`, `link`
-- **Instantaneous measurements:** dist, closing_speed, speed_diff, vel1, vel2, yaw_diff, ttc, mdrac, lateral_offset, accel1, accel2, label1, label2, same_zone
-
-**Note:** Each row is an instantaneous measurement at a specific timestamp (not aggregated statistics).
-
-## Configuration
-
-Edit [configuration.yaml](configuration.yaml) to customize:
-
-```yaml
-data:
-  regions:
-    brussels:
-      csv_path: "/path/to/detections.csv"
-      output_dir: "/path/to/output"
-
-features:
-  # Enable/disable feature groups
-  temporal: [...]
-  kinematic: [...]
-  
-models:
-  isolation_forest:
-    contamination: 0.05  # Expected % of near-misses
-```
-
-## Feature Extraction
-
-The system extracts **14 instantaneous risk features** per pair observation:
-
-| Feature | Description |
-|---------|-------------|
-| dist | Euclidean distance between vehicles (m) |
-| closing_speed | Rate of gap closure (m/s) |
-| speed_diff | Absolute speed difference (m/s) |
-| vel1, vel2 | Individual vehicle speeds (m/s) |
-| yaw_diff | Heading difference (degrees) |
-| ttc | Time-to-Collision (seconds) |
-| mdrac | Modified DRAC value |
-| lateral_offset | Cross-track distance (m) |
-| accel1, accel2 | Individual accelerations (m/s²) |
-| label1, label2 | Vehicle types (1-8) |
-| same_zone | Binary flag: 1 if same lane, 0 otherwise |
-
-All calculations use formulas from SSM module (TTC, M-DRAC, etc.).
+- Python 3.10+
+- pandas, numpy, scikit-learn
+- Existing SSM utilities (filter_approaching, etc.)
+- Region-specific zone definitions
 
 ## Region Support
 
-The system is **fully modular** and supports any region:
-- Brussels ✓
-- Oulu ✓
-- Add new regions by updating `configuration.yaml`
+Currently supported:
+- ✅ Brussels (lane zones)
+- ✅ Oulu (to be tested)
 
-## Next Steps
+Add new regions by:
+1. Defining lane zones in `regions/{region}/zones.py`
+2. Updating `irsm_config.yaml`
 
-1. ✅ Risk vector extraction implemented
-2. 🔄 Isolation Forest model (in progress)
-3. 🔄 Main classification pipeline (in progress)
-4. ⏳ VLM validation integration
-5. ⏳ Batch processing automation
+## Notes
 
-## Testing
-
-Test risk vector extraction:
-```bash
-conda run -n prem_env python irsm/risk_vector.py
-```
-
-Test data generation:
-```bash
-conda run -n prem_env python irsm/data_generation.py --region brussels --date 2025-06-01
-```
+- All values configurable via `irsm_config.yaml` (no hardcoded values)
+- Uses existing SSM functions (no reimplementation)
+- Replay links: `https://di-india-collab-2.flow-analytics.io/tools/replay/`
+- Only MDRAC is averaged; other metrics are point values
+- No threshold filtering (unlike MDRAC detection)
