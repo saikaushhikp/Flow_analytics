@@ -579,28 +579,34 @@ def identify_leader_follower(pairs: pd.DataFrame) -> pd.DataFrame:
     return pairs
 
 
-def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool = False) -> pd.DataFrame:
+def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool = False,
+                    label_sets: tuple = ([4, 6, 7, 8], [4, 6, 7, 8]),
+                    skip_same_lane_filter: bool = False) -> pd.DataFrame:
     """
-    Method-specific pipeline for MDRAC (Modified DRAC) analysis.
-    
-    MDRAC is designed for longitudinal car-following scenarios where:
-    - Vehicles are in the same lane
-    - Follower is approaching leader from behind
-    - Follower is traveling faster than leader
+    MDRAC (Modified DRAC) analysis.
     
     Filter sequence:
         1. Base pairs (distance filter) - SKIPPED if skip_pair_generation=True
-        2. Approaching only (gap must be closing)
-        3. Same lane (lateral distance check)
-        4. Leader/follower identification
-        5. Speed difference filter (follower must be faster)
-        6. TTC and closing speed thresholds
+        2. Label set filtering (optional) - NEW
+        3. Approaching only (gap must be closing)
+        4. Same lane (lateral distance check)
+        5. Leader/follower identification
+        6. Speed difference filter (follower must be faster)
+        7. TTC and closing speed thresholds
     
     Args:
         df: Vehicle data DataFrame OR pre-generated pairs DataFrame
         config: Configuration with MDRAC-specific thresholds
         skip_pair_generation: If True, assumes df is already pairs (has pos_x1 columns).
                              If False, generates pairs from vehicle data (default).
+        label_sets: Optional tuple of (set_a, set_b) to filter interaction types.
+                   Keeps pairs where (label1 in set_a AND label2 in set_b) OR vice versa.
+                   Default: ([4,6,7,8], [4,6,7,8]) for heavy vehicle-vehicle pairs.
+                   Example: ([1], [4,6,7,8]) for pedestrian-vehicle pairs.
+                   Set to None to analyze ALL label combinations.
+        skip_same_lane_filter: If True, skips the same-lane filter. Useful for crosswalks
+                              where pedestrians/cyclists cross between lanes.
+                              Default: False (applies same-lane filter for vehicle-vehicle).
         
     Returns:
         DataFrame ready for MDRAC calculation
@@ -612,6 +618,10 @@ def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool =
         # Optimized (reuse base pairs):
         base_pairs = get_mdrac_pairs(vehicle_df, config, skip_pair_generation=False)
         mdrac_pairs = get_mdrac_pairs(base_pairs, config, skip_pair_generation=True)
+        
+        # Pedestrian-vehicle detection:
+        ped_veh_pairs = get_mdrac_pairs(base_pairs, config, skip_pair_generation=True,
+                                        label_sets=([1], [4,6,7,8,3,2]))
     """
     # Stage 1: Generate base pairs (or skip if already pairs)
     if skip_pair_generation:
@@ -625,12 +635,25 @@ def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool =
         if len(pairs) == 0:
             return pairs
     
-    # Stage 2: Keep only approaching pairs
+    # Stage 2: Label set filtering (optional)
+    if label_sets is not None:
+        set_a, set_b = label_sets
+        mask = (
+            (pairs['label1'].isin(set_a) & pairs['label2'].isin(set_b)) |
+            (pairs['label1'].isin(set_b) & pairs['label2'].isin(set_a))
+        )
+        pairs = pairs[mask].copy()
+        print(f"  Label filter ({set_a} × {set_b}): {len(pairs):,} pairs")
+        
+        if len(pairs) == 0:
+            return pairs
+    
+    # Stage 3: Keep only approaching pairs
     pairs = filter_approaching(pairs)
     if len(pairs) == 0:
         return pairs
     
-    # Stage 2.5: Add zone information BEFORE same-lane filter
+    # Stage 3.5: Add zone information BEFORE same-lane filter
     # This is CRITICAL - filter_same_lane requires zone1/zone2 columns
     if skip_pair_generation:
         # Optimized workflow: pairs should already have zone1/zone2 from base_pairs
@@ -650,12 +673,15 @@ def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool =
         pairs['zone1'] = pairs['id1'].map(zone_map)
         pairs['zone2'] = pairs['id2'].map(zone_map)
     
-    # Stage 3: Same-lane filter (zone-based - filters different lanes on same road)
-    pairs = filter_same_lane(pairs, config['filters']['max_lateral_distance'])
-    if len(pairs) == 0:
-        return pairs
+    # Stage 4: Same-lane filter (optional - skip for crosswalks where ped/cyclists cross lanes)
+    if not skip_same_lane_filter:
+        pairs = filter_same_lane(pairs, config['filters']['max_lateral_distance'])
+        if len(pairs) == 0:
+            return pairs
+    else:
+        print(f"  Skipped same-lane filter (crosswalk/crossing zone)")
     
-    # Stage 4: Identify leader and follower
+    # Stage 5: Identify leader and follower
     pairs = identify_leader_follower(pairs)
     
     # Stage 5: Follower must be faster than leader

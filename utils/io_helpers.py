@@ -12,35 +12,43 @@ def save_detection_results(conflicts: pd.DataFrame,
                            method: str,
                            region: str,
                            date: str,
+                           zone_name: str = None,
                            format: str = 'csv') -> str:
     """
-    Save detection results with consistent directory structure and naming.
+    Save detection results with zone-specific directory structure.
     
-    Creates directory structure: {output_dir}/{region}/{method}/{date}/
+    Creates: {output_dir}/{region}/{zone_name}/{date}/mdrac_{date}.csv
+    OR: {output_dir}/{region}/{method}/{date}/ if zone_name not specified (backward compat)
     
     Args:
         conflicts: Detection results DataFrame
-        output_dir: Base output directory (e.g., 'results')
-        method: Detection method - 'mdrac' or 'spf'
+        output_dir: Base output directory (e.g., '/home/ubuntu/results/prem/mdrac')
+        method: Detection method - 'mdrac' or 'spf'  
         region: Region name - 'brussels' or 'oulu'
-        date: Date string (YYYY-MM-DD or similar)
+        date: Date string (YYYY-MM-DD)
+        zone_name: Zone name - 'lanes', 'crosswalks', etc. (optional)
         format: Output format - 'csv' or 'xlsx'
         
     Returns:
         Full path to saved file
         
     Example:
-        >>> path = save_detection_results(mdrac_conflicts, 
-        ...     'results', 'mdrac', 'brussels', '2025-06-04')
-        '✓ Saved 123 conflicts to results/brussels/mdrac/04/mdrac_04.csv'
+        >>> save_detection_results(conflicts, '/home/ubuntu/results/prem/mdrac',
+        ...     'mdrac', 'brussels', '2025-06-01', zone_name='lanes')
+        '/home/ubuntu/results/prem/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv'
     """
     # Create directory structure
-    day = date.split('-')[-1]  # Extract day (e.g., '04' from '2025-06-04')
-    output_path = Path(output_dir) / region / method / day
-    output_path.mkdir(parents=True, exist_ok=True)
+    if zone_name:
+        # New structure: {output_dir}/{region}/{zone}/{date}/
+        output_path = Path(output_dir) / region / zone_name / date
+        filename = f"mdrac_{date}.{format}"
+    else:
+        # Old structure for backward compatibility
+        day = date.split('-')[-1]
+        output_path = Path(output_dir) / region / method / day
+        filename = f"{method}_{day}.{format}"
     
-    # Generate filename
-    filename = f"{method}_{day}.{format}"
+    output_path.mkdir(parents=True, exist_ok=True)
     filepath = output_path / filename
     
     # Save based on format

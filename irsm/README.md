@@ -225,6 +225,76 @@ Add new regions by:
 1. Defining lane zones in `regions/{region}/zones.py`
 2. Updating `irsm_config.yaml`
 
+
+## Supervised Near-Miss Detection
+
+**NEW**: IRSM now includes supervised learning models for near-miss classification.
+
+### Quick Start
+
+**1. Train Models** (one-time):
+```bash
+python3 irsm/models/supervised.py --train
+```
+
+**2. Run Detection**:
+
+Edit `irsm/supervised_detect.py` variables:
+```python
+DATA_PATH = 'irsm/data/brussels/2025-06-01/lanes.csv'
+OUTPUT_DIR = 'irsm/results/brussels/2025-06-01'
+MODELS = ['random_forest', 'xgboost', 'neural_network']
+THRESHOLD = 0.5
+```
+
+Then run:
+```bash
+python3 irsm/supervised_detect.py
+```
+
+**Output**: `{OUTPUT_DIR}/{model_name}.csv` (detected near-misses only)
+
+### Models
+
+Three trained classifiers:
+- **Random Forest**: Ensemble decision trees
+- **XGBoost**: Gradient boosting (best performance)
+- **Neural Network**: MLP with early stopping
+
+**Features used** (interactive only, 7 features):
+- `distance`, `closing_speed`, `closing_accel`
+- `ttc`, `mdrac`, `yaw_diff`, `yaw_rate`
+
+**Performance** (on Brussels data):
+- AUC: 1.000
+- F1: 0.996-1.000
+- Training: 2,752 balanced samples
+- Test: 400 original pairs
+
+### Supervised vs Unsupervised
+
+| Method | Isolation Forest | Supervised Models |
+|--------|-----------------|-------------------|
+| Type | Unsupervised | Supervised |
+| Training | No labels needed | Requires labeled data |
+| Detection Rate | Configurable (contamination param) | Learned from data |
+| Advantage | Works without labels | Higher accuracy with labels |
+| Use Case | Initial exploration | Production detection |
+
+### Files
+
+```
+irsm/
+├── create_supervised_dataset.py    # Build training data
+├── supervised_detect.py             # Detection script
+├── models/
+│   ├── supervised.py                # Classifier + training
+│   ├── isolation_forest.py          # Unsupervised
+│   ├── gaussian_anomaly.py          # Unsupervised
+│   └── saved/                       # Trained models
+└── data/supervised/                 # Train/val/test splits
+```
+
 ## Notes
 
 - All values configurable via `irsm_config.yaml` (no hardcoded values)

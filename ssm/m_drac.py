@@ -52,32 +52,46 @@ class ModifiedDRAC:
         8: 'bus'
     }
     
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: Optional[dict] = None, zone_type: Optional[str] = None):
         """
         Initialize M-DRAC detector with configuration.
         
         Args:
             config: Configuration dictionary (loads from CONFIG_PATH if None)
+            zone_type: Optional zone type for zone-specific overrides 
+                      (e.g., 'crosswalks', 'lanes', 'crossing')
         """
         if config is None:
             config = load_config()
         
         self.config = config
-        self.prt = config['mdrac']['prt']                       # Perception-Reaction Time by vehicle type
-        self.min_mdrac = config['mdrac']['min_mdrac']           # Minimum threshold for detection
-        self.severity_thresholds = config['mdrac']['severity']  # Severity classification
+        self.zone_type = zone_type
+        
+        # Apply zone-specific overrides if specified
+        mdrac_config = config['mdrac'].copy()
+        if zone_type and 'zone_overrides' in config['mdrac']:
+            if zone_type in config['mdrac']['zone_overrides']:
+                # Apply zone-specific overrides
+                overrides = config['mdrac']['zone_overrides'][zone_type]
+                mdrac_config.update(overrides)
+                print(f"  [M-DRAC] Applied zone overrides for '{zone_type}': {overrides}")
+        
+        # Load parameters (with zone overrides applied if present)
+        self.prt = mdrac_config['prt']                       # Perception-Reaction Time by vehicle type
+        self.min_mdrac = mdrac_config['min_mdrac']           # Minimum threshold for detection
+        self.severity_thresholds = mdrac_config['severity']  # Severity classification
         
         # Adaptive detection parameters
-        self.accel_threshold = config['mdrac'].get('closing_accel_threshold', -0.5)
-        self.min_time_buffer = config['mdrac'].get('min_time_buffer', 0.2)
+        self.accel_threshold = mdrac_config.get('closing_accel_threshold', -0.5)
+        self.min_time_buffer = mdrac_config.get('min_time_buffer', 0.2)
         
-        # Temporal averaging parameters
-        self.avg_window = config['mdrac'].get('avg_window', 1.0)
-        self.min_avg_frames = config['mdrac'].get('min_avg_frames', 3)
+        # Temporal averaging parameters (zone-specific if overridden)
+        self.avg_window = mdrac_config.get('avg_window', 1.0)
+        self.min_avg_frames = mdrac_config.get('min_avg_frames', 3)
         
         # Yaw-based detection parameters (non-longitudinal conflicts)
-        self.yaw_diff_rate_threshold = config['mdrac'].get('yaw_diff_rate_threshold', 15.0)
-        self.longitudinal_yaw_threshold = config['mdrac'].get('longitudinal_yaw_threshold', 30.0)
+        self.yaw_diff_rate_threshold = mdrac_config.get('yaw_diff_rate_threshold', 15.0)
+        self.longitudinal_yaw_threshold = mdrac_config.get('longitudinal_yaw_threshold', 30.0)
     
     def detect(self, data: pd.DataFrame, is_pairs_data: bool = False) -> pd.DataFrame:
         """

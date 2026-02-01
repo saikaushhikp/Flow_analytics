@@ -76,13 +76,13 @@ filters:
   vehicle_labels: [4, 6, 7, 8]  # car, van, truck, bus
   
   # Basic motion filters
-  min_vehicle_speed: 1.5     # m/s - filters stationary/parking vehicles
+  min_vehicle_speed: 0.5     # m/s - filters stationary/parking vehicles
   max_distance: 8.0          # m - maximum distance between vehicles to consider
-  max_lateral_distance: 1.5  # m - maximum perpendicular distance (same lane check) - reduced from 3.0 to avoid parallel high-speed false positives
+  max_lateral_distance: 2.0  # m - maximum perpendicular distance
   
   # Conflict detection filters
   max_ttc: 1.8               # seconds - Time-To-Collision threshold
-  min_closing_speed: 1.0     # m/s - minimum rate of gap closure
+  min_closing_speed: 0.75     # m/s - minimum rate of gap closure
   min_speed_diff: 0.5        # m/s - follower must be faster than leader
 
 
@@ -114,6 +114,21 @@ mdrac:
   # Temporal averaging parameters
   avg_window: 1.0          # seconds - rolling average window
   min_avg_frames: 3        # minimum frames required for sustained event
+  
+  # Zone-specific overrides
+  zone_overrides:
+    crosswalks:
+      # Faster detection for crosswalks - pedestrian-vehicle interactions are brief
+      avg_window: 0.2         # reduced from 1.0s for faster ped-vehicle interactions
+      min_avg_frames: 1       # reduced from 3 frames
+    lanes:
+      # Use default values 
+      avg_window: 1.0
+      min_avg_frames: 3
+    crossing:
+      # Similar to crosswalks for Oulu crossing zones
+      avg_window: 0.2
+      min_avg_frames: 2
   
   # Dual-metric detection (for non-longitudinal conflicts)
   yaw_diff_rate_threshold: 15.0      # deg/s - yaw rate threshold

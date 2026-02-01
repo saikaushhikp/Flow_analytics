@@ -13,6 +13,7 @@ wheels/
 # data directories
 *Data*
 *data*
+irsm/models/saved
 
 # Reference & testing files
 *test*
