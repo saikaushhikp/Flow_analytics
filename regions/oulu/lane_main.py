@@ -13,6 +13,7 @@ from tqdm import tqdm
 import geopandas as gpd
 from shapely import wkt
 import warnings
+import argparse
 warnings.filterwarnings('ignore')
 
 # Modular imports
@@ -27,9 +28,16 @@ from regions.oulu.zones import get_footpath_zones, get_exclusion_zone, get_lane_
 from ssm.utils import load_config, find_all_nearby_pairs, get_mdrac_pairs, assign_zones_to_vehicles
 from ssm.m_drac import ModifiedDRAC
 
-# Configuration
-START_DATE = "2025-08-22"
-END_DATE = "2025-09-11"
+# Configuration - CLI arguments with fallback to defaults
+parser = argparse.ArgumentParser(description='Oulu Lane-based MDRAC Detection')
+parser.add_argument('--start-date', type=str, default="2025-08-22",
+                    help='Start date (YYYY-MM-DD). Default: 2025-08-22')
+parser.add_argument('--end-date', type=str, default="2025-09-11",
+                    help='End date (YYYY-MM-DD). Default: 2025-09-11')
+args = parser.parse_args()
+
+START_DATE = args.start_date
+END_DATE = args.end_date
 DATA_DIR = "/home/ubuntu/data/uploads/oulu_data/objects/clean/objects/clean"
 OUTPUT_DIR = "/home/ubuntu/results/prem/mdrac"
 
@@ -37,6 +45,9 @@ config = load_config("/home/ubuntu/prem/config.yaml")
 
 print("="*70)
 print("OULU LANE ANALYSIS")
+print("="*70)
+print(f"Date: {START_DATE} to {END_DATE}")
+print("="*70)
 print("="*70)
 print(f"Date: {START_DATE} to {END_DATE}")
 print("="*70)

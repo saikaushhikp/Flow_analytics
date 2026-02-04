@@ -1,0 +1,2 @@
+timestamp,id1,id2,zone,interaction,leader,dist,TTC,MDRAC,closing_speed,speed_diff,yaw_diff,link
+2025-08-25 12:10:18.596872330,1909951,1909988,R-B,car_v_car,1909951,2.4344213,0.87002814,6.92499303817749,2.798095,1.4846573,25.178808,https://di-india-collab-2.flow-analytics.io/tools/replay/2025-08-25T12:10:18Z
