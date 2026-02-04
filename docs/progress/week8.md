@@ -118,9 +118,87 @@ Week 8 focuses on consolidating documentation, refining IRSM classification appr
 - `irsm/models/saved/` - Trained models (RF, XGBoost, NN)
 
 ### Status
-✅ Supervised learning fully operational
-✅ Perfect test performance (AUC 1.0)
-✅ Ready for production near-miss detection
+✅ Supervised learning pipeline operational
+✅ Perfect test performance (AUC 1.0) on original training/test data
+⚠️ **Data mismatch discovered**: Training data (MDRAC 5-10 m/s²) incompatible with Brussels IRSM data (MDRAC 0.3 m/s²)
+⚠️ Models flag 98-100% of Brussels pairs as near-misses (incorrect due to distribution mismatch)
+🔄 **Status**: Supervised models work correctly but need retraining on IRSM-compatible data
+✅ Isolation Forest and Gaussian models work correctly on Brussels data
+
+### Feb 2, 2026 - Data Mismatch Investigation
+
+**Issue Found**: Supervised models trained on high-MDRAC data (supervised_data/sample_supervised.csv) don't generalize to low-MDRAC IRSM data (irsm/data/brussels/*/lanes.csv).
+
+**Root Cause**:
+- Training "safe" samples: Mean MDRAC = 5.22 m/s²
+- Training "near-miss" samples: Mean MDRAC = 10.42 m/s²
+- Brussels IRSM data: Mean MDRAC = 0.28 m/s² (365/369 pairs < 2.5)
+
+**Analysis**: Models never saw low-MDRAC data during training, treat it as anomalous.
+
+**Solutions**:
+1. Retrain on IRSM data with proper labels (MDRAC threshold or Isolation Forest pseudo-labels)
+2. Use unsupervised methods (Isolation Forest works correctly)
+3. Create new labeled dataset matching IRSM distribution
+
+### Feb 2, 2026 - Crosswalk Detection Bug Investigation & Fix
+
+**Issue Found**: Crosswalk pedestrian-vehicle detection was failing with 0 pairs detected.
+
+**Root Causes Identified**:
+1. **Zone ID Mismatch**: Base pairs contained lane zone IDs (E-L1, B-L2, etc.), but crosswalk filtering looked for crosswalk zone IDs (1015, 1016, etc.)
+2. **Data Loss**: Crosswalk zone assignments were dropped before generating pairs
+3. **Label Filtering**: `find_all_nearby_pairs()` filtered by `vehicle_labels=[4,6,7,8]`, excluding pedestrians (label 1)
+4. **Double Filtering**: `ModifiedDRAC.detect()` re-applied label filtering even with `is_pairs_data=True`
+
+**Solution Implemented**: Created separate detection scripts for each zone type
+
+**New Architecture**:
+```
+regions/
+├── brussels/
+│   ├── lane_main.py          # Vehicle-vehicle lane detection
+│   └── crosswalk_main.py     # Pedestrian-vehicle crosswalk detection
+└── oulu/
+    ├── lane_main.py          # Vehicle-vehicle lane detection
+    └── crosswalk_main.py     # Pedestrian-vehicle crosswalk detection
+```
+
+**Benefits**:
+- ✅ **Clean separation**: No config conflicts between detection types
+- ✅ **Independent pipelines**: Each script has optimized preprocessing
+- ✅ **Proper filtering**: Pedestrians included only in crosswalk scripts
+- ✅ **Memory efficient**: No mixed data in memory
+- ✅ **Maintainable**: Clear, focused code per detection type
+
+**Crosswalk-Specific Configurations**:
+```python
+# Include pedestrians in vehicle labels
+config['filters']['vehicle_labels'] = [1, 2, 3, 4, 6, 7, 8]
+
+# Lower speed threshold for pedestrians
+config['filters']['min_vehicle_speed'] = 0.3  # Walking speed ~1.5 m/s
+
+# Skip same-lane filter (pedestrians cross lanes)
+crosswalk_pairs = get_mdrac_pairs(
+    base_pairs,
+    config,
+    skip_pair_generation=True,
+    label_sets=([1], [4, 6, 7, 8, 3, 2]),  # Ped × Vehicles
+    skip_same_lane_filter=True
+)
+
+# Workaround for double label filtering
+# Temporarily spoof labels to 4, restore after detection
+```
+
+**Test Results**:
+- Brussels (2025-06-10):
+  - Lane conflicts: 4
+  - Crosswalk ped-vehicle: 1 (pedestrian × bicycle)
+- Oulu (2025-08-22):
+  - Lane conflicts: 0
+  - Crosswalk ready for testing
 
 ---
 

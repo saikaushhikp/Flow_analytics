@@ -59,21 +59,33 @@ conda activate prem_env
 
 ### Running Analysis
 
-**Brussels:**
+**Brussels Lanes (Vehicle-Vehicle):**
 ```bash
 cd /home/ubuntu/prem
-python regions/brussels/main.py
+python regions/brussels/lane_main.py
 ```
 
-**Oulu:**
+**Brussels Crosswalks (Pedestrian-Vehicle):**
 ```bash
 cd /home/ubuntu/prem
-python regions/oulu/main.py
+python regions/brussels/crosswalk_main.py
+```
+
+**Oulu Lanes (Vehicle-Vehicle):**
+```bash
+cd /home/ubuntu/prem
+python regions/oulu/lane_main.py
+```
+
+**Oulu Crosswalks (Pedestrian-Vehicle):**
+```bash
+cd /home/ubuntu/prem
+python regions/oulu/crosswalk_main.py
 ```
 
 ### Configuration
 
-Edit dates in `regions/{region}/main.py`:
+Edit dates in each region's scripts:
 ```python
 START_DATE = "2025-06-01"
 END_DATE = "2025-06-01"

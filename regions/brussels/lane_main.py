@@ -32,8 +32,8 @@ from ssm.spf import SafetyPotentialField
 
 # Cell 4
 # Configuration
-START_DATE = "2025-06-01"
-END_DATE = "2025-06-01"
+START_DATE = "2025-06-11"
+END_DATE = "2025-06-11"
 DATA_DIR = "/home/ubuntu/data/uploads/objects/clean"
 OUTPUT_DIR = "/home/ubuntu/results/prem/mdrac"
 
@@ -188,80 +188,9 @@ if len(mdrac_conflicts) > 0:
 
 # Cell 13
 print("\n" + "="*70)
-print("BRUSSELS ANALYSIS COMPLETE")
-print("="*70)
-print(f"M-DRAC: {len(mdrac_conflicts):,}")
-print("="*70)
-
-# ============================================================================== 
-# CROSSWALK PEDESTRIAN-VEHICLE DETECTION (NEW)
-# ==============================================================================
-
-print("\n" + "="*70)
-print("CROSSWALK PEDESTRIAN-VEHICLE DETECTION")
-print("="*70)
-
-# Get crosswalk zones
-crosswalk_zones_list = get_crosswalk_zones()
-crosswalk_zone_ids = [z['id'] for z in crosswalk_zones_list]
-print(f"\nCrosswalk zones ({len(crosswalk_zones_list)}):")
-for zone in crosswalk_zones_list:
-    print(f"  - {zone['id']}: {zone['name']}")
-
-# Filter base pairs to crosswalk zones
-crosswalk_base = base_pairs[
-    base_pairs['zone1'].isin(crosswalk_zone_ids) &
-    base_pairs['zone2'].isin(crosswalk_zone_ids)
-].copy()
-print(f"\nBase pairs in crosswalk zones: {len(crosswalk_base):,}")
-
-if len(crosswalk_base) > 0:
-    # Apply MDRAC filters with pedestrian-vehicle label sets
-    print("\nApplying MDRAC filters with ped-vehicle label sets...")
-    print("  Label sets: Pedestrians [1] × Vehicles [4,6,7,8,3,2]")
-    print("  Skipping same-lane filter (pedestrians cross between lanes)")
-    
-    crosswalk_pairs = get_mdrac_pairs(
-        crosswalk_base,
-        config,
-        skip_pair_generation=True,
-        label_sets=([1], [4, 6, 7, 8, 3, 2]),  # Ped × Vehicles
-        skip_same_lane_filter=True  # NEW: Skip same-lane for crosswalks
-    )
-    print(f"  After MDRAC filters: {len(crosswalk_pairs):,} pairs")
-    
-    if len(crosswalk_pairs) > 0:
-        # Detect near-misses with crosswalk-specific config
-        print("\nDetecting pedestrian-vehicle conflicts...")
-        print("  Using crosswalk-specific detection parameters (reduced avg_window)")
-        
-        mdrac_detector_crosswalk = ModifiedDRAC(config, zone_type='crosswalks')
-        crosswalk_conflicts = mdrac_detector_crosswalk.detect(crosswalk_pairs, is_pairs_data=True)
-        print(f"\n{' '*70}")
-        print(f"Crosswalk Ped-Vehicle Conflicts: {len(crosswalk_conflicts):,}")
-        print(f"{'='*70}")
-        
-        # Show label distribution
-        if len(crosswalk_conflicts) > 0:
-            print("\nLabel combination distribution:")
-            label_combos = crosswalk_conflicts[['label1', 'label2']].value_counts()
-            for (l1, l2), count in label_combos.items():
-                print(f"  ({l1}, {l2}): {count}")
-            
-            # Save results
-            crosswalk_path = save_detection_results(
-                crosswalk_conflicts, OUTPUT_DIR, 'mdrac', 'brussels', START_DATE, zone_name='crosswalks'
-            )
-            print(f"\nSaved to {crosswalk_path}")
-    else:
-        print("\n⚠️  No crosswalk ped-vehicle pairs after filtering.")
-else:
-    print("\n⚠️  No pairs found in crosswalk zones.")
-
-print("\n" + "="*70)
-print("BRUSSELS ANALYSIS COMPLETE (WITH CROSSWALKS)")
+print("BRUSSELS LANE ANALYSIS COMPLETE")
 print("="*70)
 print(f"M-DRAC (Lanes): {len(mdrac_conflicts):,}")
-if 'crosswalk_conflicts' in locals() and len(crosswalk_conflicts) > 0:
-    print(f"Crosswalks (Ped-Vehicle): {len(crosswalk_conflicts):,}")
 print("="*70)
+print("\nNote: For crosswalk pedestrian-vehicle detection, run: python regions/brussels/crosswalk_main.py")
+

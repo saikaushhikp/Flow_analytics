@@ -228,7 +228,9 @@ Add new regions by:
 
 ## Supervised Near-Miss Detection
 
-**NEW**: IRSM now includes supervised learning models for near-miss classification.
+**NEW**: IRSM includes supervised learning models for near-miss classification.
+
+> **⚠️ IMPORTANT**: Current supervised models trained on high-MDRAC data (5-10 m/s²) are **not compatible** with general IRSM lanes.csv data (MDRAC ~0.3 m/s²). Models will over-predict near-misses. Use **Isolation Forest** for IRSM data or retrain supervised models on IRSM-compatible training data.
 
 ### Quick Start
 

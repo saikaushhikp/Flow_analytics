@@ -78,7 +78,7 @@ filters:
   # Basic motion filters
   min_vehicle_speed: 0.5     # m/s - filters stationary/parking vehicles
   max_distance: 8.0          # m - maximum distance between vehicles to consider
-  max_lateral_distance: 2.0  # m - maximum perpendicular distance
+  max_lateral_distance: 1.8  # m - maximum perpendicular distance
   
   # Conflict detection filters
   max_ttc: 1.8               # seconds - Time-To-Collision threshold
@@ -118,7 +118,6 @@ mdrac:
   # Zone-specific overrides
   zone_overrides:
     crosswalks:
-      # Faster detection for crosswalks - pedestrian-vehicle interactions are brief
       avg_window: 0.2         # reduced from 1.0s for faster ped-vehicle interactions
       min_avg_frames: 1       # reduced from 3 frames
     lanes:
@@ -126,7 +125,6 @@ mdrac:
       avg_window: 1.0
       min_avg_frames: 3
     crossing:
-      # Similar to crosswalks for Oulu crossing zones
       avg_window: 0.2
       min_avg_frames: 2
   
@@ -143,7 +141,7 @@ spf:
   t_star: 3.0  # seconds - characteristic time scale
   
   # Detection threshold
-  min_spf: 0.1  # minimum SPF value to classify as conflict
+  min_spf: 0.7  # minimum SPF value to classify as conflict
   
   # Severity classification
   severity:

@@ -647,6 +647,8 @@ def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool =
         
         if len(pairs) == 0:
             return pairs
+    else:
+        print(f"  Skipped label filter (label_sets=None): {len(pairs):,} pairs")
     
     # Stage 3: Keep only approaching pairs
     pairs = filter_approaching(pairs)
