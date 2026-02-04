@@ -93,7 +93,8 @@ class ModifiedDRAC:
         self.yaw_diff_rate_threshold = mdrac_config.get('yaw_diff_rate_threshold', 15.0)
         self.longitudinal_yaw_threshold = mdrac_config.get('longitudinal_yaw_threshold', 30.0)
     
-    def detect(self, data: pd.DataFrame, is_pairs_data: bool = False) -> pd.DataFrame:
+    def detect(self, data: pd.DataFrame, is_pairs_data: bool = False,
+               skip_label_filter: bool = False) -> pd.DataFrame:
         """
         Main detection pipeline for MDRAC conflicts.
         
@@ -109,6 +110,8 @@ class ModifiedDRAC:
                   OR pre-filtered pairs DataFrame (timestamp, id1, id2, pos_x1, vel_x1, ...)
             is_pairs_data: If True, data is already pairs (skip pair generation).
                           If False, data is vehicle data (default - backward compatible).
+            skip_label_filter: If True, skip label filtering in get_mdrac_pairs.
+                              Use when input pairs are already filtered for desired labels.
                 
         Returns:
             DataFrame with columns: timestamp, pair_id, zone, conflict_type, interaction,
@@ -123,7 +126,8 @@ class ModifiedDRAC:
             conflicts = detector.detect(pairs, is_pairs_data=True)
         """
         # Step 1: Get MDRAC-specific pairs (with skip flag)
-        pairs = get_mdrac_pairs(data, self.config, skip_pair_generation=is_pairs_data)
+        pairs = get_mdrac_pairs(data, self.config, skip_pair_generation=is_pairs_data,
+                               skip_label_filter=skip_label_filter)
         
         if len(pairs) == 0:
             return self._empty_output()

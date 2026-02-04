@@ -8,6 +8,7 @@ sys.path.insert(0, '/home/ubuntu/prem')
 import pandas as pd
 import numpy as np
 import gc
+import argparse
 from tqdm import tqdm
 import geopandas as gpd
 from shapely import wkt
@@ -26,9 +27,16 @@ from regions.brussels.zones import get_footpath_zones, get_crosswalk_zones
 from ssm.utils import load_config, find_all_nearby_pairs, get_mdrac_pairs
 from ssm.m_drac import ModifiedDRAC
 
-# Configuration
-START_DATE = "2025-06-10"
-END_DATE = "2025-06-10"
+# Configuration - CLI arguments with fallback to defaults
+parser = argparse.ArgumentParser(description='Brussels Crosswalk Pedestrian-Vehicle Detection')
+parser.add_argument('--start-date', type=str, default="2025-06-10",
+                    help='Start date (YYYY-MM-DD). Default: 2025-06-10')
+parser.add_argument('--end-date', type=str, default="2025-06-10",
+                    help='End date (YYYY-MM-DD). Default: 2025-06-10')
+args = parser.parse_args()
+
+START_DATE = args.start_date
+END_DATE = args.end_date
 DATA_DIR = "/home/ubuntu/data/uploads/objects/clean"
 OUTPUT_DIR = "/home/ubuntu/results/prem/mdrac"
 
@@ -206,32 +214,10 @@ if len(df_crosswalk) > 0:
             print("Using crosswalk-specific detection parameters (reduced avg_window)")
             print(f"Input pairs: {len(crosswalk_pairs):,}")
             
-            # WORKAROUND: detect() calls get_mdrac_pairs again with default label_sets=([4,6,7,8], [4,6,7,8])
-            # We already filtered for ped-vehicle, so we need to pass those through
-            # Solution: Create a mapping of (id1, id2, timestamp) -> (label1, label2) before spoofing
-            
-            # Create unique pair identifier and store original labels
-            pair_key = crosswalk_pairs['id1'].astype(str) + '_' + crosswalk_pairs['id2'].astype(str) + '_' + crosswalk_pairs['timestamp'].astype(str)
-            label_mapping = dict(zip(pair_key, zip(crosswalk_pairs['label1'], crosswalk_pairs['label2'])))
-            
-            # Temporarily set all labels to 4 (car) so they pass the [4,6,7,8] filter
-            crosswalk_pairs['label1'] = 4
-            crosswalk_pairs['label2'] = 4
-            
+            # Clean detection without label spoofing
             detector = ModifiedDRAC(config, zone_type='crosswalks')
-            crosswalk_conflicts = detector.detect(crosswalk_pairs, is_pairs_data=True)
-            
-            # Restore original labels in results
-            if len(crosswalk_conflicts) > 0:
-                def restore_labels(row):
-                    key = f"{int(row['id1'])}_{int(row['id2'])}_{row['timestamp']}"
-                    if key in label_mapping:
-                        return label_mapping[key]
-                    return (row['label1'], row['label2'])
-                
-                restored = crosswalk_conflicts.apply(restore_labels, axis=1, result_type='expand')
-                crosswalk_conflicts['label1'] = restored[0]
-                crosswalk_conflicts['label2'] = restored[1]
+            crosswalk_conflicts = detector.detect(crosswalk_pairs, is_pairs_data=True,
+                                                 skip_label_filter=True)
             
             print(f"\n{'='*70}")
             print(f"Crosswalk Ped-Vehicle Conflicts: {len(crosswalk_conflicts):,}")
@@ -241,14 +227,8 @@ if len(df_crosswalk) > 0:
             del crosswalk_pairs
             gc.collect()
             
-            # Show label distribution
+            # Save results
             if len(crosswalk_conflicts) > 0:
-                print("\nLabel combination distribution:")
-                label_combos = crosswalk_conflicts[['label1', 'label2']].value_counts()
-                for (l1, l2), count in label_combos.items():
-                    print(f"  ({l1}, {l2}): {count}")
-                
-                # Save results
                 crosswalk_path = save_detection_results(
                     crosswalk_conflicts, 
                     OUTPUT_DIR, 

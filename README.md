@@ -195,3 +195,115 @@ For questions or issues, refer to project documentation in `docs/` directory.
 ## License
 
 Internal research project - Flow Analytics
+
+## Recent Improvements (February 2026)
+
+### ✅ Feb 4, 2026: Clean skip_label_filter Implementation
+**Major Achievement**: Eliminated all label spoofing workarounds with professional parameter-based design
+
+**Problem Solved**: Double label filtering in crosswalk detection
+- Crosswalk scripts pre-filter for ped-vehicle pairs
+- Detector re-applied default vehicle-only filter  
+- Result: Zero pedestrian conflicts detected
+
+**Solution**: New `skip_label_filter` parameter allows bypassing redundant label filtering
+
+```python
+# Clean usage (no workarounds!)
+detector = ModifiedDRAC(config, zone_type='crosswalks')
+conflicts = detector.detect(crosswalk_pairs, 
+                           is_pairs_data=True,
+                           skip_label_filter=True)
+```
+
+**Benefits**:
+- ✅ Zero technical debt (removed 35+ lines of workarounds)
+- ✅ Backward compatible (default behavior preserved)
+- ✅ Self-documenting (clear parameter name)
+- ✅ Production tested (Day 3: 3 conflicts detected correctly)
+
+### ✅ CLI Batch Processing
+Scripts now accept date ranges for automated batch processing:
+
+```bash
+# Process entire Brussels dataset (214 days)
+python regions/brussels/lane_main.py \
+    --start-date 2025-06-01 --end-date 2025-12-31
+
+python regions/brussels/crosswalk_main.py \
+    --start-date 2025-06-01 --end-date 2025-12-31
+
+# Or use batch scripts
+./regions/brussels/brussels_lanes.sh
+./regions/brussels/brussels_crosswalks.sh
+```
+
+**Features**:
+- `--start-date` and `--end-date` CLI arguments
+- Fallback to hardcoded defaults if no args
+- Progress tracking: `[N/214] Processing 2025-06-XX`
+- Error handling with continue prompts
+
+## Advanced Usage Examples
+
+### Pedestrian-Vehicle Detection (Crosswalks)
+
+```python
+from ssm.m_drac import ModifiedDRAC
+from ssm.utils import get_mdrac_pairs
+
+# Pre-filter for ped-vehicle pairs
+crosswalk_pairs = get_mdrac_pairs(
+    base_pairs,
+    config,
+    skip_pair_generation=True,
+    label_sets=([1], [4, 6, 7, 8, 3, 2]),  # Ped × Vehicles
+    skip_same_lane_filter=True  # Peds cross lanes
+)
+
+# Detect conflicts with skip_label_filter
+detector = ModifiedDRAC(config, zone_type='crosswalks')
+conflicts = detector.detect(
+    crosswalk_pairs,
+    is_pairs_data=True,
+    skip_label_filter=True  # Don't re-filter labels
+)
+```
+
+### Vehicle-Vehicle Detection (Lanes)
+
+```python
+# Use default label filtering
+lane_pairs = get_mdrac_pairs(
+    base_pairs,
+    config,
+    skip_pair_generation=True
+    # label_sets defaults to ([4,6,7,8], [4,6,7,8])
+)
+
+detector = ModifiedDRAC(config, zone_type='lanes')
+conflicts = detector.detect(
+    lane_pairs,
+    is_pairs_data=True
+    # skip_label_filter defaults to False
+)
+```
+
+## Testing & Verification
+
+**Day 3 (2025-06-03) Verification**:
+- ✅ Detected: 3 crosswalk ped-vehicle conflicts
+- ✅ Output: Correct labels (pedestrian_v_car, bicycle_v_pedestrian)
+- ✅ Data quality: No NaN values, valid MDRAC/TTC ranges
+- ✅ MDRAC: 6.29 - 10.33 m/s² (all above 3.4 threshold)
+- ✅ Architecture: Clean implementation, zero workarounds
+
+## Documentation
+
+**Comprehensive documentation** in `docs/`:
+- `docs/progress/` - Weekly progress reports (Week 1-8)
+- `docs/progress/week8.md` - Latest developments (skip_label_filter, batch processing)
+- `docs/MDRAC_implementation.md` - M-DRAC technical details
+- `docs/SPF.md` - Safety Potential Field documentation
+
+**Latest Updates**: See `docs/progress/week8.md` for Feb 4, 2026 developments

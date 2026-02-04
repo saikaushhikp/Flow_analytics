@@ -581,7 +581,8 @@ def identify_leader_follower(pairs: pd.DataFrame) -> pd.DataFrame:
 
 def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool = False,
                     label_sets: tuple = ([4, 6, 7, 8], [4, 6, 7, 8]),
-                    skip_same_lane_filter: bool = False) -> pd.DataFrame:
+                    skip_same_lane_filter: bool = False,
+                    skip_label_filter: bool = False) -> pd.DataFrame:
     """
     MDRAC (Modified DRAC) analysis.
     
@@ -636,7 +637,9 @@ def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool =
             return pairs
     
     # Stage 2: Label set filtering (optional)
-    if label_sets is not None:
+    if skip_label_filter:
+        print(f"  Skipped label filter (skip_label_filter=True): {len(pairs):,} pairs")
+    elif label_sets is not None:
         set_a, set_b = label_sets
         mask = (
             (pairs['label1'].isin(set_a) & pairs['label2'].isin(set_b)) |

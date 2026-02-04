@@ -2,7 +2,6 @@
 # Converted from main.ipynb
 # Brussels MDRAC Analysis with Crosswalk Detection
 
-# Cell 2
 # Standard imports
 import sys
 sys.path.insert(0, '/home/ubuntu/prem')
@@ -10,6 +9,7 @@ sys.path.insert(0, '/home/ubuntu/prem')
 import pandas as pd
 import numpy as np
 import gc
+import argparse
 from tqdm import tqdm
 import geopandas as gpd
 from shapely import wkt
@@ -31,9 +31,16 @@ from ssm.m_drac import ModifiedDRAC
 from ssm.spf import SafetyPotentialField
 
 # Cell 4
-# Configuration
-START_DATE = "2025-06-11"
-END_DATE = "2025-06-11"
+# Configuration - CLI arguments with fallback to defaults
+parser = argparse.ArgumentParser(description='Brussels Lane-based MDRAC Detection')
+parser.add_argument('--start-date', type=str, default="2025-06-11",
+                    help='Start date (YYYY-MM-DD). Default: 2025-06-11')
+parser.add_argument('--end-date', type=str, default="2025-06-11",
+                    help='End date (YYYY-MM-DD). Default: 2025-06-11')
+args = parser.parse_args()
+
+START_DATE = args.start_date
+END_DATE = args.end_date
 DATA_DIR = "/home/ubuntu/data/uploads/objects/clean"
 OUTPUT_DIR = "/home/ubuntu/results/prem/mdrac"
 
