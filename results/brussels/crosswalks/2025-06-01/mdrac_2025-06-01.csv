@@ -1,3 +1,1 @@
 timestamp,id1,id2,zone,interaction,leader,dist,TTC,MDRAC,closing_speed,speed_diff,yaw_diff,link,label1,label2
-2025-06-01 10:21:01.240341902,10570519,10571392,1015,car_v_car,10571392,4.201413,1.0056356,9.691052835942346,4.1778684,2.7526598,167.74681,https://di-india-collab-2.flow-analytics.io/tools/replay/2025-06-01T10:21:01Z,2,1
-2025-06-01 16:28:54.823690891,10853565,10853782,1019,car_v_car,10853565,1.6207879,0.72009337,5.6325100262959795,2.2508023,1.7851167,120.63447,https://di-india-collab-2.flow-analytics.io/tools/replay/2025-06-01T16:28:54Z,1,2
