@@ -1,7 +1,3 @@
-# PREM - Pedestrian Risk Evaluation & Monitoring
-
-Traffic safety analysis system for detecting near-miss conflicts using vehicle trajectory data.
-
 ## Overview
 
 PREM (Pedestrian Risk Evaluation & Monitoring) is a comprehensive traffic safety analysis framework that detects near-miss conflicts between road users using trajectory-based safety metrics. The system processes vehicle/pedestrian detection data and identifies dangerous interactions using Modified DRAC (Deceleration Rate to Avoid Crash) and other SSMs.
