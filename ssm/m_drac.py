@@ -94,7 +94,8 @@ class ModifiedDRAC:
         self.longitudinal_yaw_threshold = mdrac_config.get('longitudinal_yaw_threshold', 30.0)
     
     def detect(self, data: pd.DataFrame, is_pairs_data: bool = False,
-               skip_label_filter: bool = False) -> pd.DataFrame:
+               skip_label_filter: bool = False,
+               skip_same_lane_filter: bool = False) -> pd.DataFrame:
         """
         Main detection pipeline for MDRAC conflicts.
         
@@ -112,6 +113,8 @@ class ModifiedDRAC:
                           If False, data is vehicle data (default - backward compatible).
             skip_label_filter: If True, skip label filtering in get_mdrac_pairs.
                               Use when input pairs are already filtered for desired labels.
+            skip_same_lane_filter: If True, skip same-lane filtering in get_mdrac_pairs.
+                                   Use for crosswalk pedestrian-vehicle interactions.
                 
         Returns:
             DataFrame with columns: timestamp, pair_id, zone, conflict_type, interaction,
@@ -127,7 +130,8 @@ class ModifiedDRAC:
         """
         # Step 1: Get MDRAC-specific pairs (with skip flag)
         pairs = get_mdrac_pairs(data, self.config, skip_pair_generation=is_pairs_data,
-                               skip_label_filter=skip_label_filter)
+                               skip_label_filter=skip_label_filter,
+                               skip_same_lane_filter=skip_same_lane_filter)
         
         if len(pairs) == 0:
             return self._empty_output()
@@ -381,10 +385,10 @@ class ModifiedDRAC:
         yaw_diff = np.degrees(yaw_diff)  # Convert to degrees
         
         # Generate replay links 
-        # Format: https://di-india-collab-2.flow-analytics.io/tools/replay/{date}T{time}Z
+        # Format: https://di-india-collab.flow-analytics.io/tools/replay/{date}T{time}Z
         timestamps = pd.to_datetime(pairs['timestamp'])
         replay_times = timestamps
-        links = replay_times.apply(lambda t: f"https://di-india-collab-2.flow-analytics.io/tools/replay/{t.strftime('%Y-%m-%d')}T{t.strftime('%H:%M:%S')}Z")
+        links = replay_times.apply(lambda t: f"https://di-india-collab.flow-analytics.io/tools/replay/{t.strftime('%Y-%m-%d')}T{t.strftime('%H:%M:%S')}Z")
         
         # Build output DataFrame with zone information
         output = pd.DataFrame({

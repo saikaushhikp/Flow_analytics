@@ -28,7 +28,7 @@ model:
 ### 2. Generate Risk Vectors
 
 ```bash
-conda run -n prem_env python irsm/data_generation.py
+conda run -n flow_env python irsm/data_generation.py
 ```
 
 Output: `irsm/data/brussels/2025-06-01/lanes.csv` (~369 same-lane pairs)
@@ -36,7 +36,7 @@ Output: `irsm/data/brussels/2025-06-01/lanes.csv` (~369 same-lane pairs)
 ### 3. Run Detection
 
 ```bash
-conda run -n prem_env python irsm/models/isolation_forest.py
+conda run -n flow_env python irsm/models/isolation_forest.py
 ```
 
 Output: `irsm/results/brussels/2025-06-01/lanes_detections.csv` (~37 detections at 10%)
@@ -301,6 +301,6 @@ irsm/
 
 - All values configurable via `irsm_config.yaml` (no hardcoded values)
 - Uses existing SSM functions (no reimplementation)
-- Replay links: `https://di-india-collab-2.flow-analytics.io/tools/replay/`
+- Replay links: `https://di-india-collab.flow-analytics.io/tools/replay/`
 - Only MDRAC is averaged; other metrics are point values
 - No threshold filtering (unlike MDRAC detection)

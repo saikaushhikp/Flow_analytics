@@ -9,10 +9,16 @@ import os
 import sys
 from pathlib import Path
 import pandas as pd
-from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / '.env')
-sys.path.insert(0, str(Path(__file__).parent.parent))
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+REPO_ROOT = Path(__file__).parent.parent
+if load_dotenv is not None:
+    load_dotenv(REPO_ROOT / '.env')
+sys.path.insert(0, str(REPO_ROOT))
 
 from ssm.utils import load_config
 config = load_config()
@@ -29,7 +35,7 @@ day = "01"  # Day to process
 # Auto-construct paths
 # =============================================================================
 
-base_results = paths_config.get('base_results', '/home/ubuntu/prem/results/brussels/mdrac')
+base_results = paths_config.get('base_results', str(REPO_ROOT / 'results' / 'brussels' / 'mdrac'))
 base_data = paths_config.get('base_data', '/home/ubuntu/data/uploads/objects/clean')
 
 csv_path = f"{base_results}/{day}/mdrac_{day}.csv"

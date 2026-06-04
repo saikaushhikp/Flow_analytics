@@ -625,7 +625,7 @@ Located in `risk_vector.py`. Key logic:
 #### Key Features
 - **Uses existing SSM functions** - `filter_approaching`, `filter_same_lane` (no reimplementation)
 - **Config-driven** - All thresholds from YAML
-- **Proper URL** - `https://di-india-collab-2.flow-analytics.io/tools/replay/`
+- **Proper URL** - `https://di-india-collab.flow-analytics.io/tools/replay/`
 - **Two-stage pipeline** - Data generation → Detection (separate scripts)
 
 ### Issues Resolved During Implementation
@@ -636,7 +636,7 @@ Located in `risk_vector.py`. Key logic:
 
 2. ✅ **Fixed URL**
    - Initial: `brussels.flow-analytics.io`
-   - Fixed: `di-india-collab-2.flow-analytics.io`
+   - Fixed: `di-india-collab.flow-analytics.io`
 
 3. ✅ **Correct aggregation logic**
    - Initial: Averaged ALL metrics (incorrect)
@@ -671,12 +671,12 @@ Located in `risk_vector.py`. Key logic:
 
 **Generate risk vectors:**
 ```bash
-conda run -n prem_env python irsm/data_generation.py
+conda run -n flow_env python irsm/data_generation.py
 ```
 
 **Run anomaly detection:**
 ```bash
-conda run -n prem_env python irsm/models/isolation_forest.py
+conda run -n flow_env python irsm/models/isolation_forest.py
 ```
 
 **Adjust configuration:**

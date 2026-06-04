@@ -9,13 +9,16 @@ Usage:
 """
 
 import sys
-sys.path.insert(0, '/home/ubuntu/prem')
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from shapely import wkt
 import argparse
-from pathlib import Path
 import numpy as np
 
 

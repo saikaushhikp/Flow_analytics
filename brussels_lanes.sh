@@ -12,7 +12,7 @@ echo ""
 
 # Activate conda environment
 source ~/miniconda3/etc/profile.d/conda.sh
-conda activate prem_env
+conda activate flow_env
 
 # Date range
 START_DATE="2025-06-03"

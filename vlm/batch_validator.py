@@ -11,7 +11,7 @@ Usage:
     
     # Validate all pairs
     results = validate_pairs_batch(
-        csv_path='/home/ubuntu/prem/results/brussels/mdrac/01/mdrac_01.csv',
+        csv_path='results/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv',
         data_df=df,
         pairs=pairs,
         output_dir='results/brussels/vlm_validation'
@@ -30,7 +30,6 @@ from vlm.utils import (
     extract_pair_data,
     save_combined_plot
 )
-from vlm.vlm_backend import validate_event
 
 
 def validate_pairs_batch(
@@ -65,6 +64,8 @@ def validate_pairs_batch(
     Returns:
         DataFrame with validation results
     """
+    from vlm.vlm_backend import validate_event
+
     # Step 1: Load CSV once
     print(f"Loading MDRAC data from {csv_path}...")
     mdrac_df = load_mdrac_csv(csv_path)    
@@ -182,4 +183,3 @@ def validate_pairs_batch(
     print(f"✓ Saved final results to {final_path}")
         
     return results_df
-

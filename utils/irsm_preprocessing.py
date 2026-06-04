@@ -49,7 +49,8 @@ def apply_preprocessing_filters(df, region='brussels', config=None, verbose=True
     
     if config is None:
         from ssm.utils import load_config
-        config = load_config('/home/ubuntu/prem/config.yaml')
+        from utils.paths import default_config_path
+        config = load_config(str(default_config_path()))
     
     initial_ids = df['id'].nunique()
     initial_rows = len(df)

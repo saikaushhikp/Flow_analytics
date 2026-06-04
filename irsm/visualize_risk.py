@@ -9,20 +9,31 @@ Usage:
 """
 
 import sys
-sys.path.insert(0, '/home/ubuntu/prem')
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
-from pathlib import Path
 import yaml
 
 
 def load_irsm_config(config_path='irsm/irsm_config.yaml'):
     """Load IRSM configuration"""
-    with open(config_path, 'r') as f:
+    config_file = Path(config_path)
+    if not config_file.is_absolute():
+        config_file = REPO_ROOT / config_file
+    with config_file.open('r') as f:
         return yaml.safe_load(f)
+
+
+def resolve_repo_path(path_value):
+    path = Path(path_value).expanduser()
+    return path if path.is_absolute() else REPO_ROOT / path
 
 
 def visualize_risk_space(data_path, detections_path, output_dir, config):
@@ -205,15 +216,16 @@ def print_statistics(normal_pairs, anomaly_pairs):
 
 if __name__ == '__main__':
     # Load config
-    config = load_irsm_config('/home/ubuntu/prem/irsm/irsm_config.yaml')
+    config = load_irsm_config()
     
     region = config['region']
     date = config['date']
+    output_base = resolve_repo_path(config['data']['output_base'])
     
     # Paths
-    data_path = f'/home/ubuntu/prem/irsm/data/{region}/{date}/lanes.csv'
-    detections_path = f'/home/ubuntu/prem/irsm/results/{region}/{date}/lanes_detections.csv'
-    output_dir = f'/home/ubuntu/prem/irsm/results/{region}/{date}/visualizations'
+    data_path = output_base / 'data' / region / date / 'lanes.csv'
+    detections_path = output_base / 'results' / region / date / 'lanes_detections.csv'
+    output_dir = output_base / 'results' / region / date / 'visualizations'
     
     print(f"\n{'='*70}")
     print(f"IRSM RISK SPACE VISUALIZATION - {region.upper()} - {date}")

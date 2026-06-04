@@ -13,6 +13,7 @@ import pandas as pd
 from typing import Tuple, List, Dict
 import yaml
 import gc
+from pathlib import Path
 from shapely import wkt
 from shapely.geometry import Point
 import geopandas as gpd
@@ -33,13 +34,13 @@ except ImportError:
     print("[SSM] Warning: Numba not available - falling back to single-threaded mode")
 
 
-# Global configuration path
-CONFIG_PATH = 'config.yaml'
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = REPO_ROOT / 'config.yaml'
 
 
-def load_config(path: str = CONFIG_PATH) -> dict:
+def load_config(path: str | Path = CONFIG_PATH) -> dict:
     """Load configuration from YAML."""
-    with open(path, 'r') as f:
+    with Path(path).expanduser().open('r') as f:
         return yaml.safe_load(f)
 
 

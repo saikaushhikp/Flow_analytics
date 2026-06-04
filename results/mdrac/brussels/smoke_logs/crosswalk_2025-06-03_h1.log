@@ -1,0 +1,132 @@
+[SSM] Numba enabled with 15 threads
+======================================================================
+BRUSSELS CROSSWALK PEDESTRIAN-VEHICLE DETECTION
+======================================================================
+Date: 2025-06-03 to 2025-06-03
+Data: /home/kaushik/Kezual/Flow_analytics/data
+Output: /home/kaushik/Kezual/Flow_analytics/results/mdrac
+Smoke mode: max_hours=1
+Vehicle labels: [1, 2, 3, 4, 6, 7, 8]
+======================================================================
+
+Loading data...
+[MEMORY] Before loading: 170.1 MB
+
+Loading data:   0%|          | 0/1 [00:00<?, ?it/s]
+Loading data: 100%|██████████| 1/1 [00:00<00:00,  7.81it/s]
+Loading data: 100%|██████████| 1/1 [00:00<00:00,  7.79it/s]
+[DF MEMORY] Loaded data: 57.5 MB (987,938 rows)
+Loaded 987,938 records
+
+======================================================================
+Lifetime Filtering
+======================================================================
+[lifespan filter] Removed 6 short-lived IDs
+  Before: 240 IDs (987,938 rows)
+  After: 234 IDs (987,481 rows)
+[DF MEMORY] After lifetime filter: 65.0 MB (987,481 rows)
+
+======================================================================
+Footpath Zone Filtering
+======================================================================
+Attaching footpath zones to 987,481 rows...
+[MEMORY] Before footpath zones: 473.5 MB
+
+Zone assignment batches:   0%|          | 0/10 [00:00<?, ?it/s]
+Zone assignment batches:  10%|█         | 1/10 [00:00<00:01,  8.21it/s]
+Zone assignment batches:  30%|███       | 3/10 [00:00<00:00, 11.47it/s]
+Zone assignment batches:  50%|█████     | 5/10 [00:00<00:00, 11.69it/s]
+Zone assignment batches:  70%|███████   | 7/10 [00:00<00:00, 10.72it/s]
+Zone assignment batches:  90%|█████████ | 9/10 [00:00<00:00, 10.85it/s]
+Zone assignment batches: 100%|██████████| 10/10 [00:00<00:00, 11.03it/s]
+[MEMORY] After footpath zones: 569.3 MB
+✓ Zones attached! Total rows: 987,481
+[footpath zone] Removed 0 objects
+[MEMORY] After footpath filter: 453.1 MB
+
+======================================================================
+Crosswalk Zone Assignment
+======================================================================
+Attaching crosswalk zones to 987,481 rows...
+[MEMORY] Before crosswalk zones: 453.2 MB
+
+Zone assignment batches:   0%|          | 0/10 [00:00<?, ?it/s]
+Zone assignment batches:  10%|█         | 1/10 [00:00<00:00,  9.43it/s]
+Zone assignment batches:  30%|███       | 3/10 [00:00<00:00, 10.62it/s]
+Zone assignment batches:  50%|█████     | 5/10 [00:00<00:00, 11.39it/s]
+Zone assignment batches:  70%|███████   | 7/10 [00:00<00:00, 10.98it/s]
+Zone assignment batches:  90%|█████████ | 9/10 [00:00<00:00, 11.33it/s]
+Zone assignment batches: 100%|██████████| 10/10 [00:00<00:00, 11.25it/s]
+[MEMORY] After crosswalk zones: 567.5 MB
+✓ Zones attached! Total rows: 987,481
+
+Vehicles in crosswalk zones: 1,793
+Label distribution in crosswalk zones:
+label
+4    1261
+1     232
+5     109
+6      95
+7      55
+3      41
+Name: count, dtype: int64
+
+[crosswalk] Removed 0 parallel vehicles
+[crosswalk] Final vehicles in zones: 1,793
+
+Label distribution after parallel filter:
+label
+4    1261
+1     232
+5     109
+6      95
+7      55
+3      41
+Name: count, dtype: int64
+[MEMORY] After crosswalk zone filtering: 522.6 MB
+
+======================================================================
+Static Object Removal
+======================================================================
+[static filter] Found 0 static objects
+[static filter] Removed 0 static objects
+  Before: 146 IDs (1,793 rows)
+  After: 146 IDs (1,793 rows)
+[DF MEMORY] After static filter: 0.2 MB (1,793 rows)
+Final objects for pair generation: 1,793
+
+======================================================================
+CROSSWALK PAIR GENERATION
+======================================================================
+
+Generating pairs from 1,793 crosswalk vehicles...
+[MEMORY] Before pair generation: 522.7 MB
+  Filtered vehicles: 1,675
+  Generating pairs (max_distance=8.0m)...
+  Processing 1,616 timestamps (batch_size=5,000)
+
+  Pair generation:   0%|          | 0/1 [00:00<?, ?it/s]
+  Pair generation: 100%|██████████| 1/1 [00:00<00:00, 376.64it/s]
+  Applying overlap filter (buffer=0.5m)...
+  ✓ Generated 7 nearby pairs (after overlap filter)
+  ✓ Added zone information (zone1/zone2 columns)
+  ✓ Generated 7 nearby pairs
+
+Applying MDRAC filters with ped-vehicle label sets...
+  Label sets: Pedestrians [1] × Vehicles [4,6,7,8,3,2]
+  Skipping same-lane filter (pedestrians cross between lanes)
+  Label filter ([1] × [4, 6, 7, 8, 3, 2]): 0 pairs
+  ✓ After MDRAC filters: 0 pairs
+
+⚠️  No crosswalk ped-vehicle pairs after filtering.
+✓ Saved 0 conflicts to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/crosswalks/2025-06-03/mdrac_2025-06-03.csv
+
+✓ Saved to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/crosswalks/2025-06-03/mdrac_2025-06-03.csv
+
+======================================================================
+CROSSWALK ANALYSIS COMPLETE
+======================================================================
+Total Conflicts: 0
+======================================================================
+$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/crosswalk_main.py --start-date 2025-06-03 --end-date 2025-06-03 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 1
+

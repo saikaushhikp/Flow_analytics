@@ -4,7 +4,11 @@
 
 # Standard imports
 import sys
-sys.path.insert(0, '/home/ubuntu/prem')
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import pandas as pd
 import numpy as np
@@ -16,7 +20,15 @@ from shapely import wkt
 
 # Cell 3
 # Modular imports
-from utils import log_memory, log_df_memory, load_data, save_detection_results
+from utils import (
+    brussels_data_dir,
+    default_config_path,
+    log_memory,
+    log_df_memory,
+    load_data,
+    output_root,
+    save_detection_results,
+)
 from filters.preprocessing import (
     filter_by_lifetime,
     attach_zones_to_objects,
@@ -28,7 +40,6 @@ from filters.preprocessing import (
 from regions.brussels.zones import get_lane_zones, get_footpath_zones, get_crosswalk_zones
 from ssm.utils import load_config, assign_zones_to_vehicles
 from ssm.m_drac import ModifiedDRAC
-from ssm.spf import SafetyPotentialField
 
 # Cell 4
 # Configuration - CLI arguments with fallback to defaults
@@ -37,26 +48,49 @@ parser.add_argument('--start-date', type=str, default="2025-06-11",
                     help='Start date (YYYY-MM-DD). Default: 2025-06-11')
 parser.add_argument('--end-date', type=str, default="2025-06-11",
                     help='End date (YYYY-MM-DD). Default: 2025-06-11')
+parser.add_argument('--data-dir', type=str, default=str(brussels_data_dir()),
+                    help='Trajectory parquet root. Defaults to PREM_DATA_BRUSSELS.')
+parser.add_argument('--output-dir', type=str, default=str(output_root() / 'mdrac'),
+                    help='Detection output root. Defaults to PREM_OUTPUT_ROOT/mdrac.')
+parser.add_argument('--config', type=str, default=str(default_config_path()),
+                    help='Path to config.yaml.')
+parser.add_argument('--max-hours', type=int, default=None,
+                    help='Smoke-run limit: load only the first N hourly folders.')
+parser.add_argument('--sample-limit', type=int, default=None,
+                    help='Smoke-run limit: keep only the first N rows after loading.')
 args = parser.parse_args()
 
 START_DATE = args.start_date
 END_DATE = args.end_date
-DATA_DIR = "/home/ubuntu/data/uploads/objects/clean"
-OUTPUT_DIR = "/home/ubuntu/results/prem/mdrac"
+DATA_DIR = args.data_dir
+OUTPUT_DIR = args.output_dir
 
-config = load_config("/home/ubuntu/prem/config.yaml")
+config = load_config(args.config)
 
 print("="*70)
 print("BRUSSELS TRAFFIC ANALYSIS")
 print("="*70)
 print(f"Date: {START_DATE} to {END_DATE}")
+print(f"Data: {DATA_DIR}")
+print(f"Output: {OUTPUT_DIR}")
+if args.max_hours:
+    print(f"Smoke mode: max_hours={args.max_hours}")
+if args.sample_limit:
+    print(f"Smoke mode: sample_limit={args.sample_limit}")
 print("="*70)
 
 # Cell 5
 print("\nLoading data...")
 log_memory("Before loading")
 
-df = load_data(DATA_DIR, START_DATE, END_DATE, dtypes=config['data']['dtypes'])
+df = load_data(
+    DATA_DIR,
+    START_DATE,
+    END_DATE,
+    dtypes=config['data']['dtypes'],
+    max_hours=args.max_hours,
+    sample_limit=args.sample_limit,
+)
 
 log_df_memory(df, "Loaded data")
 print(f"Loaded {len(df):,} records")
@@ -175,7 +209,7 @@ log_memory("After pair generation")
 # Filter pairs for M-DRAC 
 print("\nFiltering pairs for M-DRAC...")
 mdrac_pairs = get_mdrac_pairs(base_pairs, config, skip_pair_generation=True)
-print(f"✓ M-DRAC pairs after filtering: {len(mdrac_pairs):,}\"")
+print(f"✓ M-DRAC pairs after filtering: {len(mdrac_pairs):,}")
 
 # Detect conflicts from filtered pairs
 print("\nDetecting M-DRAC conflicts...")
@@ -189,9 +223,8 @@ print(f"{'='*70}")
 
 # Cell 12
 # Save M-DRAC results
-if len(mdrac_conflicts) > 0:
-    mdrac_path = save_detection_results(mdrac_conflicts, OUTPUT_DIR, 'mdrac', 'brussels', START_DATE, zone_name='lanes')
-    print(f"Saved to {mdrac_path}")
+mdrac_path = save_detection_results(mdrac_conflicts, OUTPUT_DIR, 'mdrac', 'brussels', START_DATE, zone_name='lanes')
+print(f"Saved to {mdrac_path}")
 
 # Cell 13
 print("\n" + "="*70)
@@ -200,4 +233,3 @@ print("="*70)
 print(f"M-DRAC (Lanes): {len(mdrac_conflicts):,}")
 print("="*70)
 print("\nNote: For crosswalk pedestrian-vehicle detection, run: python regions/brussels/crosswalk_main.py")
-

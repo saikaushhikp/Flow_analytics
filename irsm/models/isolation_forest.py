@@ -12,32 +12,43 @@ Output: irsm/results/{region}/{date}/{zone_name}_detections.csv
 """
 
 import sys
-sys.path.insert(0, '/home/ubuntu/prem')
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
-from pathlib import Path
 import yaml
 from tqdm import tqdm
 
 
 def load_irsm_config(config_path='irsm/irsm_config.yaml'):
     """Load IRSM configuration"""
-    with open(config_path, 'r') as f:
+    config_file = Path(config_path)
+    if not config_file.is_absolute():
+        config_file = REPO_ROOT / config_file
+    with config_file.open('r') as f:
         return yaml.safe_load(f)
+
+
+def resolve_repo_path(path_value):
+    path = Path(path_value).expanduser()
+    return path if path.is_absolute() else REPO_ROOT / path
 
 
 def run_isolation_forest():
     """Train and detect per zone"""
     
     # Load config
-    config = load_irsm_config('/home/ubuntu/prem/irsm/irsm_config.yaml')
+    config = load_irsm_config()
     
     region = config['region']
     date = config['date']
-    output_base = config['data']['output_base']
+    output_base = resolve_repo_path(config['data']['output_base'])
     contamination = config['model']['contamination']
     n_estimators = config['model']['n_estimators']
     random_state = config['model']['random_state']
@@ -49,8 +60,8 @@ def run_isolation_forest():
     print("="*70)
     
     # Input and output paths
-    data_file = Path(f"{output_base}/data/{region}/{date}/lanes.csv")
-    output_dir = Path(f"{output_base}/results/{region}/{date}")
+    data_file = output_base / "data" / region / date / "lanes.csv"
+    output_dir = output_base / "results" / region / date
     output_dir.mkdir(parents=True, exist_ok=True)
     
     if not data_file.exists():

@@ -8,7 +8,7 @@
 ### Safety Metrics
 - **M-DRAC (Modified DRAC):** Deceleration-based conflict detection
 - **IRSM:** Intersection Risk Safety Metric (under development)
-- **SPF:** Safety Potential Field (planned)
+- **SPF:** Safety Potential Field (experimental-disabled)
 
 ### Smart Filtering
 - **Label-based:** Filter by interaction types (ped-vehicle, vehicle-vehicle, etc.)
@@ -24,7 +24,7 @@ prem/
 ├── ssm/                     # Safety metrics
 │   ├── m_drac.py           # Modified DRAC detector
 │   ├── utils.py            # Pairing and filtering utilities
-│   └── spf.py              # Safety Potential Field
+│   └── spf.py              # Experimental-disabled Safety Potential Field
 ├── filters/                 # Preprocessing filters
 │   └── preprocessing.py    # Lifetime, static, zone filters
 ├── regions/                 # Region-specific analysis
@@ -46,41 +46,38 @@ prem/
 
 ```bash
 conda env create -f environment.yaml
-conda activate prem_env
+conda activate flow_env
 ```
 
 ### Running Analysis
 
 **Brussels Lanes (Vehicle-Vehicle):**
 ```bash
-cd /home/ubuntu/prem
+cd /path/to/prem
 python regions/brussels/lane_main.py
 ```
 
 **Brussels Crosswalks (Pedestrian-Vehicle):**
 ```bash
-cd /home/ubuntu/prem
+cd /path/to/prem
 python regions/brussels/crosswalk_main.py
 ```
 
-**Oulu Lanes (Vehicle-Vehicle):**
-```bash
-cd /home/ubuntu/prem
-python regions/oulu/lane_main.py
-```
-
-**Oulu Crosswalks (Pedestrian-Vehicle):**
-```bash
-cd /home/ubuntu/prem
-python regions/oulu/crosswalk_main.py
-```
+Oulu pipelines are currently deferred while the Brussels + M-DRAC + IRSM path is stabilized.
 
 ### Configuration
 
-Edit dates in each region's scripts:
-```python
-START_DATE = "2025-06-01"
-END_DATE = "2025-06-01"
+Use CLI flags for dates and smoke runs:
+```bash
+python regions/brussels/lane_main.py --start-date 2025-06-01 --end-date 2025-06-01 --max-hours 1
+```
+
+By default, Brussels scripts use the repository-local `data/` folder when it exists.
+
+Optional environment variables:
+```bash
+export PREM_DATA_BRUSSELS=/path/to/objects/clean
+export PREM_OUTPUT_ROOT=/path/to/results
 ```
 
 Tune detection parameters in `config.yaml`:
@@ -96,7 +93,7 @@ mdrac:
 ## Output Structure
 
 ```
-/home/ubuntu/results/prem/mdrac/
+results/mdrac/
 ├── brussels/
 │   ├── lanes/
 │   │   └── 2025-06-01/

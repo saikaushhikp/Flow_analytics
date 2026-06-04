@@ -7,8 +7,9 @@ date: '2025-06-01'
 
 # Data Paths
 data:
-  input_dir: '/home/ubuntu/data/uploads/objects/clean'
-  output_base: '/home/ubuntu/prem/irsm'
+  input_dir: 'data'
+  # Set PREM_DATA_BRUSSELS or pass --input-dir to override input_dir.
+  output_base: 'irsm'
 
 # Preprocessing Filters
 preprocessing:

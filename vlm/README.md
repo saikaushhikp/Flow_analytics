@@ -25,7 +25,7 @@ Get free API key from: https://aistudio.google.com/app/apikey
 ### 2. Activate environment
 
 ```bash
-conda activate prem_env
+conda activate flow_env
 cd /home/ubuntu/prem
 ```
 
@@ -232,7 +232,7 @@ validate.py
 ## Testing
 
 ```bash
-conda activate prem_env
+conda activate flow_env
 cd /home/ubuntu/prem
 python vlm/test_refactored.py
 ```
@@ -257,7 +257,7 @@ Testing refactored VLM codebase...
 
 ### Import errors
 ```bash
-conda activate prem_env  # Make sure you're in the right environment
+conda activate flow_env  # Make sure you're in the right environment
 ```
 
 ### API rate limits

@@ -225,7 +225,7 @@ def extract_risk_vectors(pairs: pd.DataFrame,
         if region:
             try:
                 ts_str = pd.to_datetime(aggregated['timestamp']).dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-                aggregated['link'] = f"https://di-india-collab-2.flow-analytics.io/tools/replay/" + ts_str
+                aggregated['link'] = f"https://di-india-collab.flow-analytics.io/tools/replay/" + ts_str
             except:
                 pass
     

@@ -1,0 +1,149 @@
+[SSM] Numba enabled with 15 threads
+======================================================================
+BRUSSELS TRAFFIC ANALYSIS
+======================================================================
+Date: 2025-06-07 to 2025-06-07
+Data: /home/kaushik/Kezual/Flow_analytics/data
+Output: /home/kaushik/Kezual/Flow_analytics/results/mdrac
+Smoke mode: max_hours=1
+======================================================================
+
+Loading data...
+[MEMORY] Before loading: 169.9 MB
+
+Loading data:   0%|          | 0/1 [00:00<?, ?it/s]
+Loading data: 100%|██████████| 1/1 [00:00<00:00,  7.68it/s]
+Loading data: 100%|██████████| 1/1 [00:00<00:00,  7.67it/s]
+[DF MEMORY] Loaded data: 57.4 MB (986,767 rows)
+Loaded 986,767 records
+
+======================================================================
+Lifetime Filtering
+======================================================================
+[lifespan filter] Removed 18 short-lived IDs
+  Before: 667 IDs (986,767 rows)
+  After: 649 IDs (985,451 rows)
+[DF MEMORY] After lifetime filter: 64.8 MB (985,451 rows)
+
+======================================================================
+Footpath Zone Filtering
+======================================================================
+Attaching footpath zones to 985,451 rows...
+[MEMORY] Before footpath zones: 472.9 MB
+
+Zone assignment batches:   0%|          | 0/10 [00:00<?, ?it/s]
+Zone assignment batches:  10%|█         | 1/10 [00:00<00:00,  9.21it/s]
+Zone assignment batches:  30%|███       | 3/10 [00:00<00:00, 11.03it/s]
+Zone assignment batches:  50%|█████     | 5/10 [00:00<00:00, 11.33it/s]
+Zone assignment batches:  70%|███████   | 7/10 [00:00<00:00, 10.12it/s]
+Zone assignment batches:  90%|█████████ | 9/10 [00:00<00:00, 10.41it/s]
+Zone assignment batches: 100%|██████████| 10/10 [00:00<00:00, 10.63it/s]
+[MEMORY] After footpath zones: 568.9 MB
+✓ Zones attached! Total rows: 985,451
+[footpath zone] Removed 3 objects
+[MEMORY] After footpath filter: 523.8 MB
+
+======================================================================
+Crosswalk Zone Filtering
+======================================================================
+Attaching crosswalk zones to 985,028 rows...
+[MEMORY] Before crosswalk zones: 523.9 MB
+
+Zone assignment batches:   0%|          | 0/10 [00:00<?, ?it/s]
+Zone assignment batches:  20%|██        | 2/10 [00:00<00:00, 11.18it/s]
+Zone assignment batches:  40%|████      | 4/10 [00:00<00:00, 12.02it/s]
+Zone assignment batches:  60%|██████    | 6/10 [00:00<00:00, 11.04it/s]
+Zone assignment batches:  80%|████████  | 8/10 [00:00<00:00, 11.69it/s]
+Zone assignment batches: 100%|██████████| 10/10 [00:00<00:00, 11.77it/s]
+Zone assignment batches: 100%|██████████| 10/10 [00:00<00:00, 11.65it/s]
+/home/kaushik/Kezual/Flow_analytics/filters/preprocessing/zone_assignment.py:83: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  result = pd.concat(output_chunks, ignore_index=True)
+[MEMORY] After crosswalk zones: 570.0 MB
+✓ Zones attached! Total rows: 985,028
+[crosswalk] Removed 0 parallel vehicles
+[MEMORY] After crosswalk filter: 570.2 MB
+
+======================================================================
+Static Object Removal
+======================================================================
+[static filter] Found 213 static objects
+[static filter] Removed 213 static objects
+  Before: 646 IDs (985,028 rows)
+  After: 433 IDs (158,777 rows)
+[DF MEMORY] After static filter: 10.4 MB (158,777 rows)
+
+======================================================================
+Lane Zone Assignment
+======================================================================
+
+Assigning zones to 158,777 vehicles using spatial join...
+Processing in batches of 100,000 rows
+
+Zone assignment:   0%|          | 0/2 [00:00<?, ?it/s]
+Zone assignment:  50%|█████     | 1/2 [00:00<00:00,  8.71it/s]
+Zone assignment: 100%|██████████| 2/2 [00:00<00:00, 11.35it/s]
+
+✓ Zone assignment complete!
+  Vehicles in zones: 46,401
+  Vehicles outside zones: 113,544
+zone
+unknown    113544
+E-L1        15265
+B-L2         9867
+E-L2         7977
+C-L1         7134
+D-L1         2676
+D-L2         1764
+B-L1         1168
+C-L2          417
+A-L1          133
+Name: count, dtype: int64
+
+Vehicles in lanes: 46,401
+[DF MEMORY] Lane vehicles: 5.8 MB (46,401 rows)
+
+======================================================================
+M-DRAC Detection
+======================================================================
+
+Generating nearby pairs...
+[MEMORY] Before pair generation: 530.2 MB
+  Filtered vehicles: 25,585
+  Generating pairs (max_distance=8.0m)...
+  Processing 17,009 timestamps (batch_size=5,000)
+
+  Pair generation:   0%|          | 0/4 [00:00<?, ?it/s]
+  Pair generation: 100%|██████████| 4/4 [00:00<00:00, 267.88it/s]
+  Applying overlap filter (buffer=0.5m)...
+  ✓ Generated 669 nearby pairs (after overlap filter)
+  ✓ Added zone information (zone1/zone2 columns)
+✓ Generated 669 base pairs
+[MEMORY] After pair generation: 568.9 MB
+
+Filtering pairs for M-DRAC...
+  Label filter ([4, 6, 7, 8] × [4, 6, 7, 8]): 669 pairs
+ Approaching pairs: 249
+  Zone filter (same lane): 134 pairs (filtered 115 different-lane)
+  Lateral filter (<= 1.8m): 69 pairs (filtered 65 not aligned)
+  ✓ Total filtered: 180 pairs | Remaining: 69 pairs
+  Speed diff > 0.5: 0
+  Final MDRAC pairs: 0
+✓ M-DRAC pairs after filtering: 0
+
+Detecting M-DRAC conflicts...
+
+======================================================================
+M-DRAC Conflicts: 0
+======================================================================
+✓ Saved 0 conflicts to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/lanes/2025-06-07/mdrac_2025-06-07.csv
+Saved to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/lanes/2025-06-07/mdrac_2025-06-07.csv
+
+======================================================================
+BRUSSELS LANE ANALYSIS COMPLETE
+======================================================================
+M-DRAC (Lanes): 0
+======================================================================
+
+Note: For crosswalk pedestrian-vehicle detection, run: python regions/brussels/crosswalk_main.py
+$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/lane_main.py --start-date 2025-06-07 --end-date 2025-06-07 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 1
+

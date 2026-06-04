@@ -11,8 +11,8 @@ wheels/
 .vscode/
 
 # data directories
-*Data*
-*data*
+Data/
+data/
 irsm/models/saved
 
 # Reference & testing files

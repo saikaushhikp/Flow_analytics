@@ -1,4 +1,4 @@
-name: prem_env
+name: flow_env
 channels:
   - conda-forge
   - defaults
@@ -41,18 +41,18 @@ dependencies:
   
   # Pip packages (VLM and dependencies not available via conda)
   - pip>=23.0
-  - pip:
-      # VLM API (use new google.genai package)
-      - google-genai>=0.1.0
-      - google-generativeai>=0.8.0
+  # - pip:
+  #     # VLM API (use new google.genai package)
+  #     - google-genai>=0.1.0
+  #     - google-generativeai>=0.8.0
       
-      # Environment variables
-      - python-dotenv>=1.0.0
+  #     # Environment variables
+  #     - python-dotenv>=1.0.0
       
-      # Image processing for VLM
-      - pillow>=10.0.0
+  #     # Image processing for VLM
+  #     - pillow>=10.0.0
       
-      # Local VLM models
-      - transformers>=4.40.0
-      - torch>=2.0.0
-      - qwen-vl-utils>=0.0.3
+  #     # Local VLM models
+  #     - transformers>=4.40.0
+  #     - torch>=2.0.0
+  #     - qwen-vl-utils>=0.0.3

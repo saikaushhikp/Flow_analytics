@@ -16,7 +16,11 @@ Usage:
 """
 
 import sys
-sys.path.insert(0, '/home/ubuntu/prem')
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import numpy as np
 import pandas as pd
@@ -26,7 +30,6 @@ from typing import Tuple, Optional
 import warnings
 import os
 from tqdm import tqdm
-from pathlib import Path
 warnings.filterwarnings('ignore')
 
 
@@ -582,18 +585,22 @@ if __name__ == "__main__":
     Generate plots for IRSM detections (anomalies only).
     """
     import yaml
+    from utils.paths import brussels_data_dir
     
     # Load config
-    with open('/home/ubuntu/prem/irsm/irsm_config.yaml', 'r') as f:
+    with (REPO_ROOT / 'irsm' / 'irsm_config.yaml').open('r') as f:
         config = yaml.safe_load(f)
     
     region = config['region']
     date = config['date']
+    output_base = Path(config['data']['output_base'])
+    if not output_base.is_absolute():
+        output_base = REPO_ROOT / output_base
     
     # Paths - using DETECTIONS (anomalies)
-    csv_path = f'/home/ubuntu/prem/irsm/results/{region}/{date}/lanes_detections.csv'
-    data_dir = '/home/ubuntu/data/uploads/objects/clean'
-    output_dir = f'/home/ubuntu/prem/irsm/results/{region}/{date}/plots'
+    csv_path = output_base / 'results' / region / date / 'lanes_detections.csv'
+    data_dir = str(brussels_data_dir())
+    output_dir = output_base / 'results' / region / date / 'plots'
     
     # Generate plots (efficient mode - only loads needed IDs)
     plot_all_pairs_from_csv(

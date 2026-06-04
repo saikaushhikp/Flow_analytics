@@ -13,7 +13,7 @@ echo ""
 
 # Activate conda environment
 source ~/miniconda3/etc/profile.d/conda.sh
-conda activate prem_env
+conda activate flow_env
 
 # Data directory
 DATA_DIR="/home/ubuntu/data/uploads/oulu_data/objects/clean/objects/clean"

@@ -522,11 +522,11 @@ def plot_all_pairs_from_csv(
     Example:
         >>> df = load_data('/data/clean', '2025-06-01', '2025-06-01')
         >>> plot_all_pairs_from_csv(
-        ...     csv_path='/home/ubuntu/prem/results/brussels/mdrac/01/mdrac_01.csv',
+        ...     csv_path='results/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv',
         ...     data_df=df
         ... )
-        # Creates: /home/ubuntu/prem/results/brussels/mdrac/01/plots/11520140_11520195/
-        #          /home/ubuntu/prem/results/brussels/mdrac/01/plots/11531151_11531576/
+        # Creates: results/mdrac/brussels/lanes/2025-06-01/plots/11520140_11520195/
+        #          results/mdrac/brussels/lanes/2025-06-01/plots/11531151_11531576/
         #          etc.
     """
     # Read CSV to get all pairs
@@ -648,7 +648,9 @@ if __name__ == "__main__":
     """
     
     # Configuration
-    DATA_DIR = '/home/ubuntu/data/uploads/objects/clean'
+    from utils.paths import brussels_data_dir, output_root
+
+    DATA_DIR = str(brussels_data_dir())
     START_DATE = "2025-06-14"
     END_DATE = "2025-06-14"
     
@@ -657,7 +659,7 @@ if __name__ == "__main__":
     df = load_data(DATA_DIR, START_DATE, END_DATE)
     print(f"Loaded {len(df)} records from {START_DATE} to {END_DATE}")
     
-    CSV_PATH = '/home/ubuntu/prem/results/brussels/mdrac/14/mdrac_14.csv'
+    CSV_PATH = str(output_root() / 'mdrac' / 'brussels' / 'lanes' / START_DATE / f'mdrac_{START_DATE}.csv')
     
     plot_all_pairs_from_csv(
         csv_path=CSV_PATH,

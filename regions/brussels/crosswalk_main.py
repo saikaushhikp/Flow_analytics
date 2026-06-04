@@ -3,7 +3,11 @@
 # Separate pipeline optimized for ped-vehicle near-miss detection at crosswalks
 
 import sys
-sys.path.insert(0, '/home/ubuntu/prem')
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import pandas as pd
 import numpy as np
@@ -14,7 +18,16 @@ import geopandas as gpd
 from shapely import wkt
 
 # Modular imports
-from utils import log_memory, log_df_memory, load_data, save_detection_results
+from utils import (
+    MDRAC_RESULT_COLUMNS,
+    brussels_data_dir,
+    default_config_path,
+    log_memory,
+    log_df_memory,
+    load_data,
+    output_root,
+    save_detection_results,
+)
 from filters.preprocessing import (
     filter_by_lifetime,
     attach_zones_to_objects,
@@ -33,15 +46,25 @@ parser.add_argument('--start-date', type=str, default="2025-06-10",
                     help='Start date (YYYY-MM-DD). Default: 2025-06-10')
 parser.add_argument('--end-date', type=str, default="2025-06-10",
                     help='End date (YYYY-MM-DD). Default: 2025-06-10')
+parser.add_argument('--data-dir', type=str, default=str(brussels_data_dir()),
+                    help='Trajectory parquet root. Defaults to PREM_DATA_BRUSSELS.')
+parser.add_argument('--output-dir', type=str, default=str(output_root() / 'mdrac'),
+                    help='Detection output root. Defaults to PREM_OUTPUT_ROOT/mdrac.')
+parser.add_argument('--config', type=str, default=str(default_config_path()),
+                    help='Path to config.yaml.')
+parser.add_argument('--max-hours', type=int, default=None,
+                    help='Smoke-run limit: load only the first N hourly folders.')
+parser.add_argument('--sample-limit', type=int, default=None,
+                    help='Smoke-run limit: keep only the first N rows after loading.')
 args = parser.parse_args()
 
 START_DATE = args.start_date
 END_DATE = args.end_date
-DATA_DIR = "/home/ubuntu/data/uploads/objects/clean"
-OUTPUT_DIR = "/home/ubuntu/results/prem/mdrac"
+DATA_DIR = args.data_dir
+OUTPUT_DIR = args.output_dir
 
 # Load base config and modify for crosswalk detection
-config = load_config("/home/ubuntu/prem/config.yaml")
+config = load_config(args.config)
 
 # CRITICAL: Include pedestrians and all relevant labels for crosswalk detection
 config['filters']['vehicle_labels'] = [1, 2, 3, 4, 6, 7, 8]  # Ped, bike, motorcycle, car, truck, bus, van
@@ -51,6 +74,12 @@ print("="*70)
 print("BRUSSELS CROSSWALK PEDESTRIAN-VEHICLE DETECTION")
 print("="*70)
 print(f"Date: {START_DATE} to {END_DATE}")
+print(f"Data: {DATA_DIR}")
+print(f"Output: {OUTPUT_DIR}")
+if args.max_hours:
+    print(f"Smoke mode: max_hours={args.max_hours}")
+if args.sample_limit:
+    print(f"Smoke mode: sample_limit={args.sample_limit}")
 print(f"Vehicle labels: {config['filters']['vehicle_labels']}")
 print("="*70)
 
@@ -60,7 +89,14 @@ print("="*70)
 print("\nLoading data...")
 log_memory("Before loading")
 
-df = load_data(DATA_DIR, START_DATE, END_DATE, dtypes=config['data']['dtypes'])
+df = load_data(
+    DATA_DIR,
+    START_DATE,
+    END_DATE,
+    dtypes=config['data']['dtypes'],
+    max_hours=args.max_hours,
+    sample_limit=args.sample_limit,
+)
 
 log_df_memory(df, "Loaded data")
 print(f"Loaded {len(df):,} records")
@@ -165,6 +201,7 @@ df_crosswalk = filter_static_objects(
 
 log_df_memory(df_crosswalk, "After static filter")
 print(f"Final objects for pair generation: {len(df_crosswalk):,}")
+crosswalk_conflicts = pd.DataFrame(columns=MDRAC_RESULT_COLUMNS)
 
 # ============================================================================
 # PAIR GENERATION
@@ -217,7 +254,8 @@ if len(df_crosswalk) > 0:
             # Clean detection without label spoofing
             detector = ModifiedDRAC(config, zone_type='crosswalks')
             crosswalk_conflicts = detector.detect(crosswalk_pairs, is_pairs_data=True,
-                                                 skip_label_filter=True)
+                                                 skip_label_filter=True,
+                                                 skip_same_lane_filter=True)
             
             print(f"\n{'='*70}")
             print(f"Crosswalk Ped-Vehicle Conflicts: {len(crosswalk_conflicts):,}")
@@ -227,18 +265,7 @@ if len(df_crosswalk) > 0:
             del crosswalk_pairs
             gc.collect()
             
-            # Save results
-            if len(crosswalk_conflicts) > 0:
-                crosswalk_path = save_detection_results(
-                    crosswalk_conflicts, 
-                    OUTPUT_DIR, 
-                    'mdrac', 
-                    'brussels', 
-                    START_DATE, 
-                    zone_name='crosswalks'
-                )
-                print(f"\n✓ Saved to {crosswalk_path}")
-            else:
+            if len(crosswalk_conflicts) == 0:
                 print("\n⚠️  No conflicts detected above threshold.")
         else:
             print("\n⚠️  No crosswalk ped-vehicle pairs after filtering.")
@@ -250,6 +277,16 @@ if len(df_crosswalk) > 0:
         gc.collect()
 else:
     print("\n⚠️  No vehicles in crosswalk zones.")
+
+crosswalk_path = save_detection_results(
+    crosswalk_conflicts,
+    OUTPUT_DIR,
+    'mdrac',
+    'brussels',
+    START_DATE,
+    zone_name='crosswalks'
+)
+print(f"\n✓ Saved to {crosswalk_path}")
 
 print("\n" + "="*70)
 print("CROSSWALK ANALYSIS COMPLETE")

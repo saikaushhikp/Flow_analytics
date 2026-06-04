@@ -4,7 +4,20 @@ I/O helper utilities for saving and loading detection results.
 
 import pandas as pd
 from pathlib import Path
-from typing import Optional
+
+
+MDRAC_RESULT_COLUMNS = [
+    'timestamp', 'id1', 'id2', 'zone', 'interaction', 'leader', 'dist', 'TTC',
+    'MDRAC', 'closing_speed', 'speed_diff', 'yaw_diff', 'link'
+]
+
+
+def assert_detection_schema(conflicts: pd.DataFrame, required_columns=None) -> None:
+    """Validate the minimal output schema expected by downstream tools."""
+    required = required_columns or MDRAC_RESULT_COLUMNS
+    missing = [column for column in required if column not in conflicts.columns]
+    if missing:
+        raise ValueError(f"Detection results missing required columns: {missing}")
 
 
 def save_detection_results(conflicts: pd.DataFrame,
@@ -22,7 +35,7 @@ def save_detection_results(conflicts: pd.DataFrame,
     
     Args:
         conflicts: Detection results DataFrame
-        output_dir: Base output directory (e.g., '/home/ubuntu/results/prem/mdrac')
+        output_dir: Base output directory
         method: Detection method - 'mdrac' or 'spf'  
         region: Region name - 'brussels' or 'oulu'
         date: Date string (YYYY-MM-DD)
@@ -33,10 +46,13 @@ def save_detection_results(conflicts: pd.DataFrame,
         Full path to saved file
         
     Example:
-        >>> save_detection_results(conflicts, '/home/ubuntu/results/prem/mdrac',
+        >>> save_detection_results(conflicts, 'results/mdrac',
         ...     'mdrac', 'brussels', '2025-06-01', zone_name='lanes')
         '/home/ubuntu/results/prem/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv'
     """
+    if method == 'mdrac':
+        assert_detection_schema(conflicts)
+
     # Create directory structure
     if zone_name:
         # New structure: {output_dir}/{region}/{zone}/{date}/
@@ -80,7 +96,7 @@ def load_detection_results(filepath: str) -> pd.DataFrame:
     filepath = Path(filepath)
     
     if filepath.suffix == '.csv':
-        df = pd.read_parquet(filepath)
+        df = pd.read_csv(filepath)
     elif filepath.suffix in ['.xlsx', '.xls']:
         df = pd.read_excel(filepath)
     else:
