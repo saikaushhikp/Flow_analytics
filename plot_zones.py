@@ -164,7 +164,7 @@ def plot_all_zones(region='oulu'):
     plt.savefig(output_path, dpi=120, bbox_inches='tight')
     plt.close('all')
     
-    print(f"✓ Saved to: {output_path}")
+    print(f"\N[CHECK MARK] Saved to: {output_path}")
     
     # Summary
     total_zones = sum(len(zones) for zones in categories.values())

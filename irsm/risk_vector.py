@@ -108,7 +108,7 @@ def aggregate_to_peak_avg_mdrac(pairs: pd.DataFrame,
     if 'avg_mdrac' in result_df.columns:
         result_df = result_df.drop(columns=['avg_mdrac'])
     
-    print(f"  ✓ Reduced to {len(result_df):,} unique pairs")
+    print(f"  \N[CHECK MARK] Reduced to {len(result_df):,} unique pairs")
     
     return result_df
 
@@ -260,7 +260,7 @@ def extract_risk_vectors(pairs: pd.DataFrame,
     available_cols = [c for c in final_cols if c in aggregated.columns]
     result = aggregated[available_cols].copy()
     
-    print(f"  ✓ Extracted risk vectors: {len(result):,} rows × {len(available_cols)} features")
+    print(f"  \N[CHECK MARK] Extracted risk vectors: {len(result):,} rows × {len(available_cols)} features")
     print(f"  Features: {', '.join([f for f in risk_features if f in result.columns])}")
     print(f"  NOTE: Only MDRAC is averaged; others are point values at peak timestamp")
     

@@ -130,7 +130,7 @@ log_memory("Before footpath zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After footpath zones")
-print(f"✓ Zones attached! Total rows: {len(df):,}")
+print(f"\N[CHECK MARK] Zones attached! Total rows: {len(df):,}")
 
 df = apply_footpath_zone_filter(df)
 df = df.drop(columns=['zone'], errors='ignore')
@@ -156,7 +156,7 @@ log_memory("Before crosswalk zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After crosswalk zones")
-print(f"✓ Zones attached! Total rows: {len(df):,}")
+print(f"\N[CHECK MARK] Zones attached! Total rows: {len(df):,}")
 
 # Filter parallel vehicles (vehicles moving parallel to crosswalk, not crossing)
 removed_ids_global = []
@@ -216,7 +216,7 @@ if len(df_crosswalk) > 0:
     
     # Generate nearby pairs within crosswalk zones
     crosswalk_base = find_all_nearby_pairs(df_crosswalk, config)
-    print(f"  ✓ Generated {len(crosswalk_base):,} nearby pairs")
+    print(f"  \N[CHECK MARK] Generated {len(crosswalk_base):,} nearby pairs")
     
     # Clean up
     del df_crosswalk
@@ -235,7 +235,7 @@ if len(df_crosswalk) > 0:
             label_sets=([1], [4, 6, 7, 8, 3, 2]),  # Ped × Vehicles
             skip_same_lane_filter=True  # Critical for crossing detection
         )
-        print(f"  ✓ After MDRAC filters: {len(crosswalk_pairs):,} pairs")
+        print(f"  \N[CHECK MARK] After MDRAC filters: {len(crosswalk_pairs):,} pairs")
         
         # Clean up
         del crosswalk_base
@@ -286,7 +286,7 @@ crosswalk_path = save_detection_results(
     START_DATE,
     zone_name='crosswalks'
 )
-print(f"\n✓ Saved to {crosswalk_path}")
+print(f"\n\N[CHECK MARK] Saved to {crosswalk_path}")
 
 print("\n" + "="*70)
 print("CROSSWALK ANALYSIS COMPLETE")

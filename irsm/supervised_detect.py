@@ -79,7 +79,7 @@ def detect_near_misses(data_path, output_dir, models, threshold=0.5):
         try:
             # Load model
             classifier = SupervisedClassifier.load_default(model_name)
-            print(f"✓ Loaded model")
+            print(f"\N[CHECK MARK] Loaded model")
             
             # Predict
             print(f"Running predictions...")
@@ -154,7 +154,7 @@ def detect_near_misses(data_path, output_dir, models, threshold=0.5):
             print(f"  - {result['output_file']}")
     
     print(f"\n{'='*70}")
-    print("✓ DETECTION COMPLETE")
+    print("\N[CHECK MARK] DETECTION COMPLETE")
     print(f"{'='*70}\n")
 
 

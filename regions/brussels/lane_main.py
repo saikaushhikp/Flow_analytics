@@ -121,7 +121,7 @@ log_memory("Before footpath zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After footpath zones")
-print(f"✓ Zones attached! Total rows: {len(df):,}")
+print(f"\N[CHECK MARK] Zones attached! Total rows: {len(df):,}")
 
 df = apply_footpath_zone_filter(df)
 df = df.drop(columns=['zone'], errors='ignore')
@@ -145,7 +145,7 @@ log_memory("Before crosswalk zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After crosswalk zones")
-print(f"✓ Zones attached! Total rows: {len(df):,}")
+print(f"\N[CHECK MARK] Zones attached! Total rows: {len(df):,}")
 
 # Filter parallel vehicles
 removed_ids_global = []
@@ -203,13 +203,13 @@ log_memory("Before pair generation")
 # OLD code signature: find_all_nearby_pairs(df, config)
 base_pairs = find_all_nearby_pairs(df_lanes, config)
 
-print(f"✓ Generated {len(base_pairs):,} base pairs")
+print(f"\N[CHECK MARK] Generated {len(base_pairs):,} base pairs")
 log_memory("After pair generation")
 
 # Filter pairs for M-DRAC 
 print("\nFiltering pairs for M-DRAC...")
 mdrac_pairs = get_mdrac_pairs(base_pairs, config, skip_pair_generation=True)
-print(f"✓ M-DRAC pairs after filtering: {len(mdrac_pairs):,}")
+print(f"\N[CHECK MARK] M-DRAC pairs after filtering: {len(mdrac_pairs):,}")
 
 # Detect conflicts from filtered pairs
 print("\nDetecting M-DRAC conflicts...")

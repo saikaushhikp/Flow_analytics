@@ -124,7 +124,7 @@ def visualize_risk_space(data_path, detections_path, output_dir, config):
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"\n✓ Saved: {output_path}")
+    print(f"\n\N[CHECK MARK] Saved: {output_path}")
     
     # Create additional 2D projections
     create_2d_projections(normal_pairs, anomaly_pairs, output_dir)
@@ -179,7 +179,7 @@ def create_2d_projections(normal_pairs, anomaly_pairs, output_dir):
     
     output_path = Path(output_dir) / 'risk_space_2d_projections.png'
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"✓ Saved: {output_path}")
+    print(f"\N[CHECK MARK] Saved: {output_path}")
 
 
 def print_statistics(normal_pairs, anomaly_pairs):
