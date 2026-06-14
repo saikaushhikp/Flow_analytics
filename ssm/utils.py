@@ -1025,7 +1025,7 @@ if __name__ == "__main__":
                 print("  Expected closing speed: {}m/s {}".format(test['expected_closing_speed'], f'\N{CHECK MARK}' if cs_correct else 'X'))
                 passed = passed and cs_correct
         
-        status = f"\N{CHECK MARK} PASSED" if passed else " X FAILED"
+        status = f"\N{CHECK MARK} PASSED" if passed else f" \N{heavy ballot x} FAILED"
         print(f"\nResult: {status}")
         results.append((test['name'], passed))
     

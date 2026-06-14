@@ -75,7 +75,7 @@ def save_detection_results(conflicts: pd.DataFrame,
     else:
         raise ValueError(f"Unsupported format: {format}. Use 'csv' or 'xlsx'")
     
-    print(f"✓ Saved {len(conflicts)} conflicts to {filepath}")
+    print(f"\N{CHECK MARK} Saved {len(conflicts)} conflicts to {filepath}")
     return str(filepath)
 
 
@@ -91,7 +91,7 @@ def load_detection_results(filepath: str) -> pd.DataFrame:
         
     Example:
         >>> df = load_detection_results('results/brussels/mdrac/04/mdrac_04.csv')
-        Loaded 123 conflicts
+        \N{CHECK MARK} Loaded 123 conflicts
     """
     filepath = Path(filepath)
     
@@ -102,5 +102,5 @@ def load_detection_results(filepath: str) -> pd.DataFrame:
     else:
         raise ValueError(f"Unsupported format: {filepath.suffix}")
     
-    print(f"Loaded {len(df)} conflicts from {filepath.name}")
+    print(f"\N{CHECK MARK} Loaded {len(df)} conflicts from {filepath.name}")
     return df

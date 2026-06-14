@@ -480,7 +480,7 @@ def load_data_for_pairs(data_dir: str, date: str, pair_ids: list) -> pd.DataFram
     # Final filter
     df = df[df['id'].isin(all_ids)].copy()
     
-    print(f"  ✓ Loaded {len(df):,} records for these objects")
+    print(f"  \N{CHECK MARK} Loaded {len(df):,} records for these objects")
     return df
 
 
@@ -562,16 +562,16 @@ def plot_all_pairs_from_csv(
         except Exception as e:
             failed += 1
             failed_pairs.append((pair_id, str(e)))
-            print(f"\nX Failed for pair {pair_id}: {e}\n")
+            print(f"\n\N{heavy ballot x} Failed for pair {pair_id}: {e}\n")
     
     # Summary
     print(f"\n{'='*60}")
     print(f"Batch Plotting Summary")
     print(f"{'='*60}")
-    print(f"✓ Successful: {successful}/{len(pair_ids)}")
+    print(f"\N{CHECK MARK} Successful: {successful}/{len(pair_ids)}")
     
     if failed > 0:
-        print(f"X Failed: {failed}/{len(pair_ids)}")
+        print(f"\N{heavy ballot x} Failed: {failed}/{len(pair_ids)}")
         print(f"\nFailed pairs:")
         for pair_id, error in failed_pairs:
             print(f"  - {pair_id}: {error}")

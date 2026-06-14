@@ -66,7 +66,7 @@ def extract_trajectories(
         traj1 = traj1[(traj1['timestamp'] >= window_start) & (traj1['timestamp'] <= window_end)]
         traj2 = traj2[(traj2['timestamp'] >= window_start) & (traj2['timestamp'] <= window_end)]
     
-    print(f"  ✓ Temporal overlap: {overlap_start} to {overlap_end}")
+    print(f"  \N{CHECK MARK} Temporal overlap: {overlap_start} to {overlap_end}")
     print(f"    Duration: {(overlap_end - overlap_start).total_seconds():.2f} seconds")
     
     return traj1, traj2
@@ -242,7 +242,6 @@ def plot_distance_over_time(
     ax.spines['right'].set_visible(False)
     
     return ax
-
 
 def plot_closing_speed_over_time(
     metrics: pd.DataFrame,
@@ -574,7 +573,7 @@ def plot_all_pairs_from_csv(
         except Exception as e:
             failed += 1
             failed_pairs.append((id1, id2, str(e)))
-            print(f"\n X Failed for pair ({id1}, {id2}): {e}\n")
+            print(f"\n\N{heavy ballot x} Failed for pair ({id1}, {id2}): {e}\n")
     
     # Summary
     print(f"\n{'='*60}")

@@ -1,6 +1,6 @@
 # Accomplishments Report
 
-**Date:** June 13, 2026  
+**Date:** June 14, 2026  
 **Repo:** Flow_analytics (formerly `prem`)  
 
 > This is an Enhanced Report Documentation Summary from the daily progress content(.txt files) provided by the user.  
@@ -71,6 +71,7 @@ Before our effort, the codebase had major blockers:
 5.  **[checks/active_pipeline_checks.py](/checks/active_pipeline_checks.py)**: Continuous-integration check script verifying active pipelines.
 6.  **[checks/run_brussels_smoke_window.py](/checks/run_brussels_smoke_window.py)**: Script to run bounded hourly sweeps over a date range.
 7.  **[checks/summarize_active_results.py](/checks/summarize_active_results.py)**: Parses results and builds the validation markdown summary.
+8. **[object_identifier.py](/object_identifier.py)**: utility for retrieving object timeline info (first/last timestamps and total frame count) for one or more object IDs.
 
 ### Key Modified Files
 1.  **[regions/brussels/lane_main.py](/regions/brussels/lane_main.py)** & **[regions/brussels/crosswalk_main.py](/regions/brussels/crosswalk_main.py)**: Hardened for configurable arguments, smoke bounds, and structured empty CSV saves. Crosswalk CLI is fully aligned with `--start-time`.
@@ -82,7 +83,35 @@ Before our effort, the codebase had major blockers:
 
 ---
 
-## 5. Current Brussels Validation Summary
+## 5. Current Code Executions
+```bash
+conda activate flow_env
+```
+* M-DRAC
+```bash
+# M-drac Lane run for 24 hours for a given start date and end date along with a start time 
+python regions/brussels/lane_main.py --start-date 2025-06-01 --start-time 00 --end-date 2025-06-01 --data-dir data --output-dir results/mdrac --max-hours 22
+
+# M-drac Crosswalk run for 24 hours for a given start date and end date along with a start time 
+python regions/brussels/crosswalk_main.py --start-date 2025-06-01 --start-time 00 --end-date 2025-06-01 --data-dir data --output-dir results/mdrac --max-hours 22
+```
+* IRSM Data pair Generation
+```bash
+# IRSM risk vector generation for a given date and time range
+python irsm/data_generation.py --date 2025-06-01 --max-hours 24 
+```
+* IRSM Anomaly Detection : These commands run for the specified `data` in the irsm's config file located at `irsm/irsm_config.yaml`
+```bash
+# IRSM anomaly detection using isolation forest, irsm kinematic plots, visualization of anomalies, and comparison against M-DRAC conflicts
+python irsm/models/isolation_forest.py
+python irsm/irsm_plotter.py
+python irsm/visualize_risk.py
+python irsm/compare_mdrac_irsm.py
+```
+
+---
+
+## 6. Current Brussels Validation Summary
 
 The following results were generated using the stabilized pipeline over a bounded 2-hour window per day (`--max-hours 22`):
 
@@ -106,7 +135,7 @@ The following results were generated using the stabilized pipeline over a bounde
 
 ---
 
-## 6. Blockers, Limitations, & Next Steps
+## 7. Blockers, Limitations, & Next Steps
 
 ### Scaling & Performance Blocker
 *   **The Memory Issue:** Full-day processing of Brussels lane data continues to exhaust system memory because the lane pipeline does not run in a chunked/batched configuration when reading trajectory chunks.

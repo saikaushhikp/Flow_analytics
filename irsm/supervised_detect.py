@@ -53,7 +53,7 @@ def detect_near_misses(data_path, output_dir, models, threshold=0.5):
     # Load data
     data_path = Path(data_path)
     if not data_path.exists():
-        print(f"\nX Data file not found: {data_path}")
+        print(f"\n\N{heavy ballot x} Data file not found: {data_path}")
         return
     
     print(f"\nLoading data: {data_path}")
@@ -127,10 +127,10 @@ def detect_near_misses(data_path, output_dir, models, threshold=0.5):
             })
             
         except FileNotFoundError as e:
-            print(f"\nX Model not found: {e}")
+            print(f"\n\N{heavy ballot x} Model not found: {e}")
             print(f"   Train first: python3 irsm/models/supervised.py --train")
         except Exception as e:
-            print(f"\nX Error: {e}")
+            print(f"\n\N{heavy ballot x} Error: {e}")
             import traceback
             traceback.print_exc()
     
