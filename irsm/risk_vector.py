@@ -6,7 +6,7 @@ Extracts risk features using AVERAGED aggregation across interactions.
 
 Features extracted:
     - Metadata: pair_id, timestamp, label1, label2, link, same_zone
-    - Risk metrics: mdrac, distance, closing_speed, closing_accel, ttc, yaw_diff, yaw_rate
+    - Risk metrics: mdrac, distance, closing_speed, closing_accel, speed_diff, ttc, yaw_diff, yaw_rate
 """
 
 import numpy as np
@@ -19,14 +19,30 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import existing SSM functions - NO REIMPLEMENTATION
-from ssm.utils import filter_approaching
+from ssm.utils import filter_approaching, identify_leader_follower
+
+
+LABEL_TO_PRT_KEY = {
+    1: 'pedestrian',
+    2: 'bicycle',
+    3: 'motorcycle',
+    4: 'car',
+    5: 'escooter',
+    6: 'van',
+    7: 'truck',
+    8: 'bus',
+}
 
 
 
 
 
-def aggregate_to_peak_avg_mdrac(pairs: pd.DataFrame,
-                                 min_avg_frames: int = 3) -> pd.DataFrame:
+def aggregate_to_peak_avg_mdrac(
+    pairs: pd.DataFrame,
+    min_avg_frames: int = 3,
+    window_sec: float = 1.0,
+    max_frame_gap: float | None = None,
+) -> pd.DataFrame:
     """
     Aggregate pairs by selecting peak avg MDRAC moment WITHOUT threshold filtering.
     
@@ -59,44 +75,62 @@ def aggregate_to_peak_avg_mdrac(pairs: pd.DataFrame,
     unique_pairs = pairs.groupby(['id1', 'id2']).size()
     print(f"  Unique pairs: {len(unique_pairs)}")
     
+    max_frame_gap = max_frame_gap or max(0.5, window_sec * 2)
+    window = pd.Timedelta(seconds=window_sec)
+
     for (id1, id2), group in pairs.groupby(['id1', 'id2']):
         group = group.sort_values('timestamp').copy()
+        group['timestamp'] = pd.to_datetime(group['timestamp'])
         
-        if len(group) < 4:
-            debug_stats['too_few_frames'] += 1
-            continue  # Require minimum 4 frames (0.4s) for rolling average
-        
-        # Calculate frame-based rolling average
-        # Use window size that approximates 1 second based on typical frame rate (~10 fps)
-        window_frames = min(max(min_avg_frames, 10), len(group))  # Adaptive window
-        
-        group['avg_mdrac'] = group['mdrac'].rolling(
-            window=window_frames,
-            min_periods=min_avg_frames,
-            center=True
-        ).mean()
-        
-        # Remove NaN values from rolling average
-        group_valid = group[group['avg_mdrac'].notna()].copy()
-        
-        if len(group_valid) == 0:
+        if len(group) < min_avg_frames:
             debug_stats['too_few_frames'] += 1
             continue
-        
-        # Take peak avg_mdrac moment (HIGHEST averaged MDRAC)
-        peak_idx = group_valid['avg_mdrac'].idxmax()
-        peak_row = group_valid.loc[peak_idx].copy()
-        
-        # Replace instantaneous MDRAC with averaged MDRAC
-        # OTHER metrics (distance, ttc, closing_speed) remain as point values!
-        peak_row['mdrac'] = peak_row['avg_mdrac']
-        
-        results.append(peak_row)
-        debug_stats['success'] += 1
+
+        gaps = group['timestamp'].diff().dt.total_seconds().fillna(0)
+        group['event_segment'] = (gaps > max_frame_gap).cumsum()
+
+        pair_success = False
+        for _, segment in group.groupby('event_segment'):
+            if len(segment) < min_avg_frames:
+                continue
+
+            indexed = segment.set_index('timestamp', drop=False)
+            indexed['avg_mdrac'] = indexed['mdrac'].rolling(
+                window=window,
+                min_periods=min_avg_frames,
+                center=True,
+            ).mean()
+
+            group_valid = indexed[indexed['avg_mdrac'].notna()].copy()
+            if len(group_valid) == 0:
+                continue
+
+            peak_idx = group_valid['avg_mdrac'].idxmax()
+            peak_rows = group_valid.loc[peak_idx]
+            if isinstance(peak_rows, pd.DataFrame):
+                peak_row = peak_rows.iloc[0].copy()
+            else:
+                peak_row = peak_rows.copy()
+            
+            del peak_rows
+            
+            peak_row['mdrac'] = peak_row['avg_mdrac']
+            peak_row['num_frames'] = len(group_valid)
+            peak_row['duration'] = (
+                group_valid['timestamp'].max() - group_valid['timestamp'].min()
+            ).total_seconds()
+
+            results.append(peak_row.to_dict())
+            pair_success = True
+
+        if pair_success:
+            debug_stats['success'] += 1
+        else:
+            debug_stats['too_few_frames'] += 1
     
     # Print debug stats
     print(f"  Debug stats:")
-    print(f"    Too few frames (< 4): {debug_stats['too_few_frames']}")
+    print(f"    Too few frames (< {min_avg_frames}): {debug_stats['too_few_frames']}")
     print(f"    Success: {debug_stats['success']}")
     
     if len(results) == 0:
@@ -108,9 +142,17 @@ def aggregate_to_peak_avg_mdrac(pairs: pd.DataFrame,
     if 'avg_mdrac' in result_df.columns:
         result_df = result_df.drop(columns=['avg_mdrac'])
     
-    print(f"  \N[CHECK MARK] Reduced to {len(result_df):,} unique pairs")
+    print(f"  \N{CHECK MARK} Reduced to {len(result_df):,} unique pairs")
     
     return result_df
+
+
+def _lookup_prt(labels: np.ndarray, prt_config: Dict) -> np.ndarray:
+    default_prt = prt_config['default']
+    return np.array([
+        prt_config.get(LABEL_TO_PRT_KEY.get(int(label), ''), default_prt)
+        for label in labels
+    ])
 
 
 def extract_risk_vectors(pairs: pd.DataFrame, 
@@ -145,7 +187,11 @@ def extract_risk_vectors(pairs: pd.DataFrame,
     
     max_ttc = config['pair_generation']['max_ttc']
     min_closing_speed = config['pair_generation']['min_closing_speed']
-    prt_default = config['prt']['default']
+    prt_config = config['prt']
+    aggregation_config = config.get('aggregation', {})
+    window_sec = aggregation_config.get('window_sec', 1.0)
+    min_avg_frames = aggregation_config.get('min_avg_frames', 3)
+    max_frame_gap = aggregation_config.get('max_frame_gap_sec')
     
     print(f"\nExtracting risk vectors from {len(pairs):,} pair observations...")
     print(f"  Using config: max_ttc={max_ttc}s, min_closing_speed={min_closing_speed} m/s")
@@ -188,14 +234,23 @@ def extract_risk_vectors(pairs: pd.DataFrame,
     # STEP 2: Compute MDRAC using formula from config (NO hardcoded values)
     # ========================================================================
     print("  Computing MDRAC...")
-    print(f"    Using PRT={prt_default}s from config")
+    print(f"    Using label-aware PRT values from config")
+
+    pairs = identify_leader_follower(pairs)
     
     # MDRAC formula (from SSM m_drac.py lines 176-184)
     # Formula: MDRAC = closing_speed / (2 * (TTC - PRT))
     # With capping to avoid infinity when (TTC - PRT) is very small
     
-    min_time_buffer = 0.2  # Standard from SSM config
-    time_available = pairs['ttc'].values - prt_default
+    follower_label = np.where(
+        pairs['is_veh1_follower'],
+        pairs['label1'],
+        pairs['label2'],
+    )
+    prt_effective = _lookup_prt(follower_label, prt_config)
+
+    min_time_buffer = config.get('min_time_buffer', 0.2)
+    time_available = pairs['ttc'].values - prt_effective
     
     # Apply formula with capping
     mdrac = np.where(
@@ -205,14 +260,21 @@ def extract_risk_vectors(pairs: pd.DataFrame,
     )
     
     pairs['mdrac'] = mdrac
+    pairs['prt_effective'] = prt_effective
     
     # ========================================================================
     # STEP 3: Aggregate to peak avg MDRAC moment (NO threshold filtering for IRSM)
     # ========================================================================
     aggregated = aggregate_to_peak_avg_mdrac(
         pairs,
-        min_avg_frames=3
+        min_avg_frames=min_avg_frames,
+        window_sec=window_sec,
+        max_frame_gap=max_frame_gap,
     )
+
+    if aggregated.empty:
+        print("  No risk vectors after temporal aggregation")
+        return pd.DataFrame()
     
     # ========================================================================
     # STEP 4: Select final features
@@ -243,6 +305,7 @@ def extract_risk_vectors(pairs: pd.DataFrame,
         'distance',                 # Point value at peak timestamp
         'closing_speed',            # Point value at peak timestamp
         'closing_accel',            # Point value at peak timestamp
+        'speed_diff',               # Follower speed minus leader speed
         'ttc',                      # Point value at peak timestamp
         'yaw_diff',                 # Point value at peak timestamp
         'yaw_diff_rate'             # Point value at peak timestamp
@@ -260,7 +323,7 @@ def extract_risk_vectors(pairs: pd.DataFrame,
     available_cols = [c for c in final_cols if c in aggregated.columns]
     result = aggregated[available_cols].copy()
     
-    print(f"  \N[CHECK MARK] Extracted risk vectors: {len(result):,} rows × {len(available_cols)} features")
+    print(f"  \N{CHECK MARK} Extracted risk vectors: {len(result):,} rows × {len(available_cols)} features")
     print(f"  Features: {', '.join([f for f in risk_features if f in result.columns])}")
     print(f"  NOTE: Only MDRAC is averaged; others are point values at peak timestamp")
     
@@ -279,6 +342,7 @@ def get_feature_names() -> List[str]:
         'distance',
         'closing_speed',
         'closing_accel',
+        'speed_diff',
         'ttc',
         'yaw_diff',
         'yaw_rate'

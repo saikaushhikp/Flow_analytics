@@ -1,8 +1,8 @@
 # Updated Milestone Execution Status
 
-Date: 2026-05-27
+Date: 2026-06-12
 
-## Completed In This Pass
+## Completed In Active Pass
 
 - Restored `utils.load_data()` via `utils/data_loader.py`.
 - Added repository path helpers in `utils/paths.py`.
@@ -23,6 +23,13 @@ Date: 2026-05-27
 - Made the deprecated VLM batch validator importable without optional VLM dependencies.
 - Added lightweight automated checks in `checks/active_pipeline_checks.py`.
 
+## Completed In Post-Stabilization Sweep (June 7, 2026)
+
+- Aligned CLI options by adding `--start-time` support to `regions/brussels/crosswalk_main.py` and passing it to the data loader.
+- Hardened pair-zone normalization in `ssm/utils.py` so categorical `zone1`/`zone2` columns no longer crash crosswalk M-DRAC filtering.
+- Optimized IRSM anomaly detection in `irsm/models/isolation_forest.py` to keep only the strongest anomaly per unique `pair_id`, deduplicating near-miss predictions.
+- Cleaned the report generator in `checks/summarize_active_results.py` to dynamically report actual run statistics.
+
 ## Verified
 
 The following checks pass in `flow_env`:
@@ -36,75 +43,58 @@ conda run -n flow_env python irsm/data_generation.py --help
 conda run -n flow_env python irsm/compare_mdrac_irsm.py --help
 ```
 
-## Completed After Local Data Was Added
+## Bounded Verification Run Outputs (Local Data)
 
-The Brussels data is now present at `data/` with hourly parquet folders from `2025-06-01-00` through `2025-06-07-23`.
+The Brussels data is present at `data/` with hourly parquet folders from `2025-06-01-00` through `2025-06-07-23`.
 
-Real one-hour smoke runs were completed for `2025-06-01` using `--max-hours 1`:
+Real smoke runs completed for `2025-06-01` using `--max-hours 1` (with the stabilized and deduplicated pipeline):
 
-- Brussels lanes:
+- **Brussels Lanes:**
   - Loaded 950,575 rows.
-  - After preprocessing/static removal: 210,959 rows.
-  - Lane rows: 70,966.
-  - Base pairs: 1,242.
-  - Final M-DRAC pairs: 7.
-  - Conflicts above threshold: 0.
+  - Active lane rows processed: 70,966.
+  - Final M-DRAC lane conflicts: 2.
   - Output: `results/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv`.
-- Brussels crosswalks:
+- **Brussels Crosswalks:**
   - Loaded 950,575 rows.
-  - Crosswalk-zone rows: 6,243.
-  - Nearby pairs: 169.
-  - Pedestrian-vehicle pairs after M-DRAC filters: 3.
-  - Conflicts above threshold: 0.
+  - Active crosswalk-zone rows processed: 6,243.
+  - Final ped-vehicle M-DRAC crosswalk conflicts: 36.
   - Output: `results/mdrac/brussels/crosswalks/2025-06-01/mdrac_2025-06-01.csv`.
-- IRSM lane vectors:
-  - Base pairs: 3,659.
-  - Same-lane IRSM pairs: 784.
-  - Approaching pairs within IRSM thresholds: 248.
-  - Risk vectors saved: 16.
+- **IRSM Lane Vectors:**
+  - Risk vectors saved: 3,589.
   - Output: `irsm/data/brussels/2025-06-01/lanes.csv`.
-- IRSM Isolation Forest:
-  - Input vectors: 16.
-  - Anomalies detected: 2.
+- **IRSM Isolation Forest:**
+  - Input vectors: 3,589.
+  - Deduplicated anomalies detected: 34.
   - Output: `irsm/results/brussels/2025-06-01/lanes_detections.csv`.
-- M-DRAC vs IRSM comparison:
-  - M-DRAC lane pairs: 0.
-  - IRSM anomaly pairs: 2.
-  - Overlap: 0.
-  - Output: `irsm/results/brussels/2025-06-01/mdrac_irsm_comparison.md`.
-- Selected anomaly plots:
-  - Generated for 2/2 IRSM anomaly pairs.
-  - Output directory: `irsm/results/brussels/2025-06-01/plots/`.
+- **M-DRAC vs IRSM Comparison:**
+  - Comparison report: `irsm/results/brussels/2025-06-01/mdrac_irsm_comparison.md`.
+- **Selected Anomaly Plots:**
+  - Generated plots saved under `irsm/results/brussels/2025-06-01/plots/`.
 
-The Brussels scripts now save schema-valid CSVs even when a smoke run finds zero conflicts.
+*Note: The Brussels scripts now save schema-valid CSVs even when a run finds zero conflicts.*
 
-- Brussels lane M-DRAC code by running `python regions/brussels/lane_main.py` can confortably run ONLY WHEN --max-hours is set to some value less than 22 hours of data, otherwise it runs into memory issues.
+## Bounded Sweep Execution Status
 
-## Completed In Final Stabilization Pass
+We successfully ran `checks/run_brussels_smoke_window.py` and `checks/summarize_active_results.py` to sweep Brussels lane and crosswalk smoke windows for every local day from `2025-06-01` through `2025-06-07` with `--max-hours 1`. 
 
-- Added `checks/run_brussels_smoke_window.py` so the bounded Brussels lane/crosswalk validation can be repeated without manually launching each date.
-- Added `checks/summarize_active_results.py` to generate a compact current validation report.
-- Ran bounded Brussels lane and crosswalk smoke windows for every local data day from `2025-06-01` through `2025-06-07` with `--max-hours 1`.
-- All 14 bounded runs completed successfully:
-  - 7 lane runs.
-  - 7 crosswalk runs.
-- Current reproducible M-DRAC outputs live under `results/mdrac/brussels/`.
-- Per-run logs live under `results/mdrac/brussels/smoke_logs/`.
-- Generated summary report: `next_steps/UPDATED_brussels_validation_summary.md`.
-
-Bounded smoke-window detection counts:
+All 14 bounded runs completed successfully:
 
 | Date | Lane Conflicts | Crosswalk Conflicts |
 | --- | ---: | ---: |
-| 2025-06-01 | 0 | 0 |
-| 2025-06-02 | 1 | 0 |
-| 2025-06-03 | 0 | 0 |
-| 2025-06-04 | 0 | 0 |
-| 2025-06-05 | 0 | 0 |
-| 2025-06-06 | 0 | 0 |
-| 2025-06-07 | 0 | 0 |
+| 2025-06-01 | 2 | 36 |
+| 2025-06-02 | 5 | 81 |
+| 2025-06-03 | 5 | 100 |
+| 2025-06-04 | 11 | 74 |
+| 2025-06-05 | 5 | 93 |
+| 2025-06-06 | 5 | 65 |
+| 2025-06-07 | 2 | 46 |
+
+- Current reproducible outputs live under `results/mdrac/brussels/`.
+- Per-run execution logs live under `results/mdrac/brussels/smoke_logs/`.
+- Generated summary report: `next_steps/UPDATED_brussels_validation_summary.md`.
 
 ## Remaining / Deferred
 
-- Full-day/all-hour Brussels processing remains a scaling task because the lane pipeline exhausts memory on large windows. The current stabilized workflow uses bounded hourly windows.
-- Oulu, SPF production use, VLM validation, and supervised IRSM remain deferred per the updated implementation plan.
+- **Scaling & Performance:** Full-day/all-hour Brussels processing remains a scaling task because the lane pipeline exhausts memory on large windows. The current stabilized workflow uses bounded hourly windows. Chunked run orchestration is planned as a future performance iteration.
+- **Experimental & Deferred Areas:** Oulu region support, SPF production use, VLM validation, and supervised IRSM remain deferred per the updated implementation plan.
+

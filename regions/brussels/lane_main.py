@@ -46,12 +46,14 @@ from ssm.m_drac import ModifiedDRAC
 parser = argparse.ArgumentParser(description='Brussels Lane-based MDRAC Detection')
 parser.add_argument('--start-date', type=str, default="2025-06-11",
                     help='Start date (YYYY-MM-DD). Default: 2025-06-11')
+parser.add_argument('--start-time', type=str, default="00",
+                    help='Start hour on the start date (HH or HH:MM). Default: 00')
 parser.add_argument('--end-date', type=str, default="2025-06-11",
                     help='End date (YYYY-MM-DD). Default: 2025-06-11')
 parser.add_argument('--data-dir', type=str, default=str(brussels_data_dir()),
-                    help='Trajectory parquet root. Defaults to PREM_DATA_BRUSSELS.')
+                    help='Trajectory parquet root. Defaults to FLOW_ANALYTICS_DATA_BRUSSELS.')
 parser.add_argument('--output-dir', type=str, default=str(output_root() / 'mdrac'),
-                    help='Detection output root. Defaults to PREM_OUTPUT_ROOT/mdrac.')
+                    help='Detection output root. Defaults to FLOW_ANALYTICS_OUTPUT_ROOT/mdrac.')
 parser.add_argument('--config', type=str, default=str(default_config_path()),
                     help='Path to config.yaml.')
 parser.add_argument('--max-hours', type=int, default=None,
@@ -70,7 +72,7 @@ config = load_config(args.config)
 print("="*70)
 print("BRUSSELS TRAFFIC ANALYSIS")
 print("="*70)
-print(f"Date: {START_DATE} to {END_DATE}")
+print(f"Date: {START_DATE} {args.start_time} to {END_DATE}")
 print(f"Data: {DATA_DIR}")
 print(f"Output: {OUTPUT_DIR}")
 if args.max_hours:
@@ -87,6 +89,7 @@ df = load_data(
     DATA_DIR,
     START_DATE,
     END_DATE,
+    start_time=args.start_time,
     dtypes=config['data']['dtypes'],
     max_hours=args.max_hours,
     sample_limit=args.sample_limit,
@@ -121,7 +124,7 @@ log_memory("Before footpath zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After footpath zones")
-print(f"\N[CHECK MARK] Zones attached! Total rows: {len(df):,}")
+print(f"✓ Zones attached! Total rows: {len(df):,}")
 
 df = apply_footpath_zone_filter(df)
 df = df.drop(columns=['zone'], errors='ignore')
@@ -145,7 +148,7 @@ log_memory("Before crosswalk zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After crosswalk zones")
-print(f"\N[CHECK MARK] Zones attached! Total rows: {len(df):,}")
+print(f"✓ Zones attached! Total rows: {len(df):,}")
 
 # Filter parallel vehicles
 removed_ids_global = []
@@ -203,13 +206,13 @@ log_memory("Before pair generation")
 # OLD code signature: find_all_nearby_pairs(df, config)
 base_pairs = find_all_nearby_pairs(df_lanes, config)
 
-print(f"\N[CHECK MARK] Generated {len(base_pairs):,} base pairs")
+print(f"✓ Generated {len(base_pairs):,} base pairs")
 log_memory("After pair generation")
 
 # Filter pairs for M-DRAC 
 print("\nFiltering pairs for M-DRAC...")
 mdrac_pairs = get_mdrac_pairs(base_pairs, config, skip_pair_generation=True)
-print(f"\N[CHECK MARK] M-DRAC pairs after filtering: {len(mdrac_pairs):,}")
+print(f"✓ M-DRAC pairs after filtering: {len(mdrac_pairs):,}")
 
 # Detect conflicts from filtered pairs
 print("\nDetecting M-DRAC conflicts...")

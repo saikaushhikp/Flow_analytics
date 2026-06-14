@@ -24,6 +24,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 import yaml
 from tqdm import tqdm
+from irsm.risk_vector import get_feature_names
 
 
 def load_irsm_config(config_path='irsm/irsm_config.yaml'):
@@ -65,7 +66,7 @@ def run_isolation_forest():
     output_dir.mkdir(parents=True, exist_ok=True)
     
     if not data_file.exists():
-        print(f"\n✗ Data file not found: {data_file}")
+        print(f"\nX Data file not found: {data_file}")
         return
     
     # Load lane pairs data
@@ -74,7 +75,9 @@ def run_isolation_forest():
     print(f"Loaded: {len(df):,} pairs")
     
     # Feature columns for model training
-    feature_cols = ['mdrac', 'distance', 'closing_speed', 'closing_accel', 'ttc', 'yaw_diff', 'yaw_rate']
+    feature_cols = [col for col in config['model'].get('feature_cols', get_feature_names()) if col in df.columns]
+    if not feature_cols:
+        raise ValueError("No configured IRSM feature columns are present in lanes.csv")
     
     # Extract features
     features = df[feature_cols].copy()
@@ -110,9 +113,21 @@ def run_isolation_forest():
     
     # Get anomalies (prediction == -1)
     detections = df[df['prediction'] == -1].copy()
+
+    # Pair-level review is the active workflow. When the same actor pair produces
+    # multiple anomalous rows, keep only the strongest anomaly to avoid inflated
+    # near-miss counts in downstream reports.
+    raw_detection_count = len(detections)
+    if len(detections) > 0 and 'pair_id' in detections.columns:
+        detections = (
+            detections.sort_values(['pair_id', 'anomaly_score', 'mdrac'], ascending=[True, True, False])
+            .drop_duplicates(subset=['pair_id'], keep='first')
+            .copy()
+        )
     
     expected = int(len(df) * contamination)
-    print(f"  Anomalies detected: {len(detections):,} ({len(detections)/len(df)*100:.2f}%)")
+    print(f"  Raw anomaly rows: {raw_detection_count:,} ({raw_detection_count/len(df)*100:.2f}%)")
+    print(f"  Unique anomaly pairs: {len(detections):,} ({len(detections)/len(df)*100:.2f}%)")
     print(f"  Expected: ~{expected}")
     
     # Save detections
@@ -127,7 +142,7 @@ def run_isolation_forest():
         print(f"Output: {detection_path}")
         print("="*70)
     else:
-        print("\n✗ No detections found!")
+        print("\nX No detections found!")
 
 
 if __name__ == '__main__':

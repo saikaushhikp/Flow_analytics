@@ -20,7 +20,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from regions.brussels import zones
 from ssm.m_drac import ModifiedDRAC
-from ssm.utils import get_mdrac_pairs, load_config
+from ssm.utils import find_all_nearby_pairs, get_mdrac_pairs, load_config
 from utils import MDRAC_RESULT_COLUMNS, load_data, load_detection_results, save_detection_results
 
 
@@ -122,6 +122,76 @@ def _check_mdrac_pairs_and_detector():
     assert list(detections.columns) == MDRAC_RESULT_COLUMNS
 
 
+def _check_pair_generation_preserves_timestamp_zones():
+    config = load_config(str(REPO_ROOT / "config.yaml"))
+    config["filters"] = config["filters"].copy()
+    config["filters"]["max_distance"] = 10.0
+
+    timestamps = pd.to_datetime(["2025-06-01 00:00:00", "2025-06-01 00:00:01"])
+    df = pd.DataFrame([
+        {
+            "timestamp": timestamps[0],
+            "id": 1,
+            "label": 4,
+            "pos_x": 0.0,
+            "pos_y": 0.0,
+            "vel_x": 1.0,
+            "vel_y": 0.0,
+            "vel": 1.0,
+            "yaw": 0.0,
+            "size_x": 0.5,
+            "size_y": 0.5,
+            "zone": "A-L1",
+        },
+        {
+            "timestamp": timestamps[0],
+            "id": 2,
+            "label": 4,
+            "pos_x": 3.0,
+            "pos_y": 0.0,
+            "vel_x": 0.5,
+            "vel_y": 0.0,
+            "vel": 0.5,
+            "yaw": 0.0,
+            "size_x": 0.5,
+            "size_y": 0.5,
+            "zone": "A-L1",
+        },
+        {
+            "timestamp": timestamps[1],
+            "id": 1,
+            "label": 4,
+            "pos_x": 0.0,
+            "pos_y": 0.0,
+            "vel_x": 1.0,
+            "vel_y": 0.0,
+            "vel": 1.0,
+            "yaw": 0.0,
+            "size_x": 0.5,
+            "size_y": 0.5,
+            "zone": "B-L1",
+        },
+        {
+            "timestamp": timestamps[1],
+            "id": 2,
+            "label": 4,
+            "pos_x": 3.0,
+            "pos_y": 0.0,
+            "vel_x": 0.5,
+            "vel_y": 0.0,
+            "vel": 0.5,
+            "yaw": 0.0,
+            "size_x": 0.5,
+            "size_y": 0.5,
+            "zone": "B-L1",
+        },
+    ])
+
+    pairs = find_all_nearby_pairs(df, config).sort_values("timestamp")
+    assert list(pairs["zone1"]) == ["A-L1", "B-L1"]
+    assert list(pairs["zone2"]) == ["A-L1", "B-L1"]
+
+
 def _check_brussels_zones():
     for zone_set in [zones.get_lane_zones(), zones.get_footpath_zones(), zones.get_crosswalk_zones()]:
         assert zone_set
@@ -134,6 +204,7 @@ def main():
     _check_config()
     _check_load_data()
     _check_result_roundtrip()
+    _check_pair_generation_preserves_timestamp_zones()
     _check_mdrac_pairs_and_detector()
     _check_brussels_zones()
     print("Active pipeline checks passed")

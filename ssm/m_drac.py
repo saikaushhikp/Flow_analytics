@@ -88,6 +88,7 @@ class ModifiedDRAC:
         # Temporal averaging parameters (zone-specific if overridden)
         self.avg_window = mdrac_config.get('avg_window', 1.0)
         self.min_avg_frames = mdrac_config.get('min_avg_frames', 3)
+        self.max_frame_gap = mdrac_config.get('max_frame_gap', max(0.5, self.avg_window * 2))
         
         # Yaw-based detection parameters (non-longitudinal conflicts)
         self.yaw_diff_rate_threshold = mdrac_config.get('yaw_diff_rate_threshold', 15.0)
@@ -272,39 +273,50 @@ class ModifiedDRAC:
         
         results = []
         
+        window = pd.Timedelta(seconds=self.avg_window)
+
         # Group by pair
         for (id1, id2), group in pairs.groupby(['id1', 'id2']):
             group = group.sort_values('timestamp').copy()
+            group['timestamp'] = pd.to_datetime(group['timestamp'])
             
-            if len(group) < 4:
-                continue  # Require minimum 4 frames (0.4s) for sustained event
-            
-            # Calculate frame-based rolling average (simpler and more robust)
-            # Use window size that approximates 1 second based on typical frame rate (~10 fps)
-            # Adapt window to available frames for shorter sequences
-            window_frames = min(max(self.min_avg_frames, 10), len(group))  # Adaptive window
-            
-            group['avg_mdrac'] = group['mdrac'].rolling(
-                window=window_frames, 
-                min_periods=self.min_avg_frames,
-                center=True
-            ).mean()
-            
-            # Keep rows where average exceeds threshold
-            sustained = group[group['avg_mdrac'] >= self.min_mdrac]
-            
-            if len(sustained) == 0:
+            if len(group) < self.min_avg_frames:
                 continue
-            
-            # Take peak avg_mdrac moment (highest averaged MDRAC)
-            peak_idx = sustained['avg_mdrac'].idxmax()
-            peak_row = sustained.loc[peak_idx].copy()
-            # Store avg_mdrac as the primary metric (not peak instantaneous)
-            peak_row['mdrac'] = peak_row['avg_mdrac']  # Replace instantaneous with average
-            peak_row['num_frames'] = len(sustained)
-            peak_row['duration'] = (group['timestamp'].max() - group['timestamp'].min()).total_seconds()
-            
-            results.append(peak_row)
+
+            gaps = group['timestamp'].diff().dt.total_seconds().fillna(0)
+            group['event_segment'] = (gaps > self.max_frame_gap).cumsum()
+
+            for _, segment in group.groupby('event_segment'):
+                if len(segment) < self.min_avg_frames:
+                    continue
+
+                indexed = segment.set_index('timestamp', drop=False)
+                indexed['avg_mdrac'] = indexed['mdrac'].rolling(
+                    window=window,
+                    min_periods=self.min_avg_frames,
+                    center=True,
+                ).mean()
+
+                sustained = indexed[indexed['avg_mdrac'] >= self.min_mdrac]
+                if len(sustained) == 0:
+                    continue
+
+                peak_idx = sustained['avg_mdrac'].idxmax()
+                peak_rows = sustained.loc[peak_idx]
+                if isinstance(peak_rows, pd.DataFrame):
+                    peak_row = peak_rows.iloc[0].copy()
+                else:
+                    peak_row = peak_rows.copy()
+                
+                del peak_rows
+                
+                peak_row['mdrac'] = peak_row['avg_mdrac']
+                peak_row['num_frames'] = len(sustained)
+                peak_row['duration'] = (
+                    sustained['timestamp'].max() - sustained['timestamp'].min()
+                ).total_seconds()
+
+                results.append(peak_row.to_dict())
         
         if len(results) == 0:
             return pd.DataFrame()
@@ -366,6 +378,8 @@ class ModifiedDRAC:
         Returns:
             DataFrame with simplified schema for analysis
         """
+        pairs = pairs.reset_index(drop=True)
+
         # Determine leader ID
         leader_id = np.where(
             pairs['is_veh1_follower'],

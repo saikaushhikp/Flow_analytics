@@ -21,10 +21,10 @@ Current local note from review:
 The code currently hardcodes `/home/ubuntu/...` paths. Replace that with env/config-driven paths. Recommended variables:
 
 ```bash
-export PREM_ROOT=/home/kaushik/Kezual/Flow_analytics
-export PREM_DATA_BRUSSELS=/path/to/brussels/objects/clean
-export PREM_DATA_OULU=/path/to/oulu/objects/clean/objects/clean
-export PREM_OUTPUT_ROOT=/home/kaushik/Kezual/Flow_analytics/results
+export FLOW_ANALYTICS_ROOT=/home/kaushik/Kezual/Flow_analytics
+export FLOW_ANALYTICS_DATA_BRUSSELS=/path/to/brussels/objects/clean
+export FLOW_ANALYTICS_DATA_OULU=/path/to/oulu/objects/clean/objects/clean
+export FLOW_ANALYTICS_OUTPUT_ROOT=/home/kaushik/Kezual/Flow_analytics/results
 ```
 
 ## Brussels Lane M-DRAC

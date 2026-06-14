@@ -562,7 +562,7 @@ def plot_all_pairs_from_csv(
         except Exception as e:
             failed += 1
             failed_pairs.append((pair_id, str(e)))
-            print(f"\n✗ Failed for pair {pair_id}: {e}\n")
+            print(f"\nX Failed for pair {pair_id}: {e}\n")
     
     # Summary
     print(f"\n{'='*60}")
@@ -571,7 +571,7 @@ def plot_all_pairs_from_csv(
     print(f"✓ Successful: {successful}/{len(pair_ids)}")
     
     if failed > 0:
-        print(f"✗ Failed: {failed}/{len(pair_ids)}")
+        print(f"X Failed: {failed}/{len(pair_ids)}")
         print(f"\nFailed pairs:")
         for pair_id, error in failed_pairs:
             print(f"  - {pair_id}: {error}")

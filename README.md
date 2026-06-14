@@ -76,8 +76,8 @@ By default, Brussels scripts use the repository-local `data/` folder when it exi
 
 Optional environment variables:
 ```bash
-export PREM_DATA_BRUSSELS=/path/to/objects/clean
-export PREM_OUTPUT_ROOT=/path/to/results
+export FLOW_ANALYTICS_DATA_BRUSSELS=/path/to/objects/clean
+export FLOW_ANALYTICS_OUTPUT_ROOT=/path/to/results
 ```
 
 Tune detection parameters in `config.yaml`:

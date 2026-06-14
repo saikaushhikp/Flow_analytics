@@ -25,12 +25,12 @@ def env_path(name: str, default: str | Path) -> Path:
 def brussels_data_dir() -> Path:
     """Default Brussels trajectory data directory."""
     local_data = repo_path("data")
-    return env_path("PREM_DATA_BRUSSELS", local_data if local_data.exists() else "/home/ubuntu/data/uploads/objects/clean")
+    return env_path("FLOW_ANALYTICS_DATA_BRUSSELS", local_data if local_data.exists() else "/home/ubuntu/data/uploads/objects/clean")
 
 
 def output_root() -> Path:
     """Default results root for generated outputs."""
-    return env_path("PREM_OUTPUT_ROOT", repo_path("results"))
+    return env_path("FLOW_ANALYTICS_OUTPUT_ROOT", repo_path("results"))
 
 
 def default_config_path() -> Path:

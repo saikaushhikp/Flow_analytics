@@ -8,6 +8,7 @@ outputs live, and what the current detection counts look like.
 from __future__ import annotations
 
 import argparse
+from datetime import date
 from pathlib import Path
 import sys
 
@@ -100,7 +101,7 @@ def main() -> None:
     lines = [
         "# Brussels Active Validation Summary",
         "",
-        "Date: 2026-05-27",
+        f"Date: {date.today().isoformat()}",
         "",
         "Scope: active Brussels M-DRAC lane/crosswalk smoke validation and IRSM lane validation. Oulu, SPF production, VLM validation, and supervised IRSM remain deferred.",
         "",
@@ -169,7 +170,7 @@ def main() -> None:
             "",
             "The active stabilization target is complete for bounded Brussels validation. Full-day/all-hour processing should be treated as a scaling task because the lane pipeline still exhausts memory on large windows.",
             "",
-            "Manual false-positive review is not encoded in this repo. The bounded run produced one lane candidate, so that candidate is the current priority for visual review using its replay link before scaling the pipeline.",
+            "Manual false-positive review is not encoded in this repo. The current bounded candidates should be reviewed through their replay links before broadening the run window or retuning thresholds.",
         ]
     )
 

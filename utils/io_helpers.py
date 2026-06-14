@@ -48,7 +48,7 @@ def save_detection_results(conflicts: pd.DataFrame,
     Example:
         >>> save_detection_results(conflicts, 'results/mdrac',
         ...     'mdrac', 'brussels', '2025-06-01', zone_name='lanes')
-        '/home/ubuntu/results/prem/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv'
+        './results/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv'
     """
     if method == 'mdrac':
         assert_detection_schema(conflicts)

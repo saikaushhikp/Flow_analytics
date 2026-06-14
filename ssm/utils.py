@@ -125,7 +125,7 @@ def assign_zones_to_vehicles(df: pd.DataFrame, detection_zones: List[Dict], batc
     gc.collect()
     
     # Statistics
-    print(f"\n\N[CHECK MARK] Zone assignment complete!")
+    print(f"\n\N{CHECK MARK} Zone assignment complete!")
     print(f"  Vehicles in zones: {(result['zone'] != 'unknown').sum():,}")
     print(f"  Vehicles outside zones: {(result['zone'] == 'unknown').sum():,}")
     
@@ -307,6 +307,8 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     # Select only needed columns (reduces memory)
     # Include size_x, size_y for overlap filter
     cols = ['timestamp', 'id', 'label', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel', 'yaw', 'size_x', 'size_y']
+    if 'zone' in vehicles.columns:
+        cols.append('zone')
     vehicles = vehicles[cols]
     
     # Stage 4: Process in timestamp batches (vectorized within each batch)
@@ -372,16 +374,21 @@ def find_all_nearby_pairs(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     print(f"  Applying overlap filter (buffer={OVERLAP_BUFFER}m)...")
     result = filter_overlapping_pairs(result, buffer=OVERLAP_BUFFER, verbose=False)
     
-    print(f"  \N[CHECK MARK] Generated {len(result):,} nearby pairs (after overlap filter)")
+    print(f"  \N{CHECK MARK} Generated {len(result):,} nearby pairs (after overlap filter)")
     
-    # Stage 7: Add zone information if available (automatic)
-    if 'zone' in df.columns and len(result) > 0:
-        zone_map = dict(zip(df['id'], df['zone']))
-        result['zone1'] = result['id1'].map(zone_map)
-        result['zone2'] = result['id2'].map(zone_map)
-        print(f"  \N[CHECK MARK] Added zone information (zone1/zone2 columns)")
+    # Zone information is preserved row-by-row by the self-merge above. Avoid
+    # global id -> zone maps because one track can move through multiple zones.
+    if 'zone1' in result.columns and 'zone2' in result.columns and len(result) > 0:
+        print(f"  \N{CHECK MARK} Added zone information (zone1/zone2 columns)")
     
     return result
+
+
+def _combine_pair_zones(pairs: pd.DataFrame) -> pd.Series:
+    """Create a readable pair zone while preserving cross-zone interactions."""
+    zone1 = pairs.get('zone1', pd.Series('unknown', index=pairs.index)).astype('string').fillna('unknown')
+    zone2 = pairs.get('zone2', pd.Series('unknown', index=pairs.index)).astype('string').fillna('unknown')
+    return pd.Series(np.where(zone1 == zone2, zone1, zone1 + '|' + zone2), index=pairs.index)
 
 
 def filter_approaching(pairs: pd.DataFrame) -> pd.DataFrame:
@@ -499,7 +506,7 @@ def filter_same_lane(pairs: pd.DataFrame, max_lateral: float) -> pd.DataFrame:
     lateral_filtered_count = after_zone - len(pairs)
     
     print(f"  Lateral filter (<= {max_lateral}m): {len(pairs):,} pairs (filtered {lateral_filtered_count:,} not aligned)")
-    print(f"  \N[CHECK MARK] Total filtered: {initial_count - len(pairs):,} pairs | Remaining: {len(pairs):,} pairs")
+    print(f"  \N{CHECK MARK} Total filtered: {initial_count - len(pairs):,} pairs | Remaining: {len(pairs):,} pairs")
     
     return pairs
 
@@ -659,25 +666,14 @@ def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool =
     if len(pairs) == 0:
         return pairs
     
-    # Stage 3.5: Add zone information BEFORE same-lane filter
-    # This is CRITICAL - filter_same_lane requires zone1/zone2 columns
-    if skip_pair_generation:
-        # Optimized workflow: pairs should already have zone1/zone2 from base_pairs
-        if 'zone1' not in pairs.columns or 'zone2' not in pairs.columns:
-            raise ValueError(
-                "When using skip_pair_generation=True, pairs must have zone1/zone2 columns. "
-                "Ensure your base_pairs include zone information before passing to get_mdrac_pairs()."
-            )
-    else:
-        # Direct workflow: add zone info from vehicle DataFrame
-        if 'zone' not in df.columns:
-            raise ValueError(
-                "Vehicle DataFrame must have 'zone' column for M-DRAC detection. "
-                "Use assign_zones_to_vehicles() before calling get_mdrac_pairs()."
-            )
-        zone_map = dict(zip(df['id'], df['zone']))
-        pairs['zone1'] = pairs['id1'].map(zone_map)
-        pairs['zone2'] = pairs['id2'].map(zone_map)
+    # Stage 3.5: Validate timestamp-level zone information before same-lane filtering.
+    # find_all_nearby_pairs preserves zone1/zone2 from the source rows; avoid global
+    # id -> zone fallbacks because tracks can move through multiple zones.
+    if ('zone1' not in pairs.columns or 'zone2' not in pairs.columns) and not skip_same_lane_filter:
+        raise ValueError(
+            "M-DRAC same-lane filtering requires timestamp-level zone1/zone2 columns. "
+            "Use assign_zones_to_vehicles() before pair generation."
+        )
     
     # Stage 4: Same-lane filter (optional - skip for crosswalks where ped/cyclists cross lanes)
     if not skip_same_lane_filter:
@@ -701,21 +697,10 @@ def get_mdrac_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool =
     pairs = pairs[(pairs['ttc'] <= max_ttc) & (pairs['closing_speed'] >= min_closing)].copy()
     print(f"  Final MDRAC pairs: {len(pairs):,}")
     
-    # Stage 7: Add zone information (depends on workflow)
-    if skip_pair_generation:
-        # Optimized workflow: pairs already have zone1/zone2 from base_pairs
-        # Just add combined 'zone' column if not present
-        if 'zone' not in pairs.columns and 'zone1' in pairs.columns:
-            pairs['zone'] = pairs['zone1']  # Should all match due to same-lane filter
-    else:
-        # Direct workflow: add zone info from original vehicle DataFrame
-        if 'zone' in df.columns:
-            zone_map = dict(zip(df['id'], df['zone']))
-            pairs['zone1'] = pairs['id1'].map(zone_map)
-            pairs['zone2'] = pairs['id2'].map(zone_map)
-            pairs['zone'] = pairs['zone1']  # Should match due to same-lane filter
+    if 'zone' not in pairs.columns and 'zone1' in pairs.columns and 'zone2' in pairs.columns:
+        pairs['zone'] = _combine_pair_zones(pairs)
     
-    return pairs
+    return pairs.reset_index(drop=True)
 
 
 def get_spf_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool = False) -> pd.DataFrame:
@@ -772,7 +757,7 @@ def get_spf_pairs(df: pd.DataFrame, config: dict, skip_pair_generation: bool = F
         pairs['zone'] = np.where(same_zone, zone1, zone1 + '_' + zone2)
     
     print(f"  Final SPF pairs: {len(pairs):,}")
-    return pairs
+    return pairs.reset_index(drop=True)
 
 
 def get_prt_for_labels(labels: np.ndarray, config: dict) -> np.ndarray:
@@ -1025,22 +1010,22 @@ if __name__ == "__main__":
             actual_follower = row['id1'] if row['is_veh1_follower'] else row['id2']
             if test['expected_follower_id'] is not None:
                 follower_correct = (actual_follower == test['expected_follower_id'])
-                print(f"  Expected follower: {test['expected_follower_id']} {'\N[CHECK MARK]' if follower_correct else '✗'}")
+                print("  Expected follower: {} {}".format(test['expected_follower_id'], f'\N{CHECK MARK}' if follower_correct else 'X'))
                 passed = passed and follower_correct
             
             # Check TTC if expected
             if test['expected_ttc'] is not None:
                 ttc_correct = abs(row['ttc'] - test['expected_ttc']) < 0.2
-                print(f"  Expected TTC: {test['expected_ttc']:.2f}s {'\N[CHECK MARK]' if ttc_correct else '✗'}")
+                print("  Expected TTC: {}s {}".format(test['expected_ttc'], f'\N{CHECK MARK}' if ttc_correct else 'X'))
                 passed = passed and ttc_correct
             
             # Check closing speed if expected
             if test['expected_closing_speed'] is not None:
                 cs_correct = abs(row['closing_speed'] - test['expected_closing_speed']) < 0.5
-                print(f"  Expected closing speed: {test['expected_closing_speed']:.1f}m/s {'\N[CHECK MARK]' if cs_correct else '✗'}")
+                print("  Expected closing speed: {}m/s {}".format(test['expected_closing_speed'], f'\N{CHECK MARK}' if cs_correct else 'X'))
                 passed = passed and cs_correct
         
-        status = "\N[CHECK MARK] PASSED" if passed else " X FAILED"
+        status = f"\N{CHECK MARK} PASSED" if passed else " X FAILED"
         print(f"\nResult: {status}")
         results.append((test['name'], passed))
     
@@ -1055,15 +1040,15 @@ if __name__ == "__main__":
     total_count = len(results)
     
     for name, passed in results:
-        status = "\N[CHECK MARK]" if passed else " X"
+        status = f"\N{CHECK MARK}" if passed else " X"
         print(f"  {status} {name}")
     
     print(f"\n{'--' * 70}")
     print(f"Results: {passed_count}/{total_count} tests passed")
     
     if passed_count == total_count:
-        print("\N[CHECK MARK] ALL TESTS PASSED!")
+        print(f"\N{CHECK MARK} ALL TESTS PASSED!")
     else:
-        print("!  SOME TESTS FAILED - Review above for details")
+        print(f"!  SOME TESTS FAILED - Review above for details")
     
     print("=" * 70)

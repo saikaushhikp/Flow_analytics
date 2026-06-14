@@ -8,7 +8,7 @@ date: '2025-06-01'
 # Data Paths
 data:
   input_dir: 'data'
-  # Set PREM_DATA_BRUSSELS or pass --input-dir to override input_dir.
+  # Set FLOW_ANALYTICS_DATA_BRUSSELS or pass --input-dir to override input_dir.
   output_base: 'irsm'
 
 # Preprocessing Filters
@@ -24,9 +24,9 @@ zones:
 
 # IRSM-Specific Pair Generation Settings
 pair_generation:
-  max_distance: 12.0                # meters - spatial proximity threshold
+  max_distance: 10.0                # meters - spatial proximity threshold
   max_lateral: 2.0                  # meters - same lane threshold
-  max_ttc: 15.0                     # seconds - TTC threshold (wider than MDRAC's 10s)
+  max_ttc: 13.0                     # seconds - TTC threshold (wider than MDRAC's 10s)
   min_closing_speed: 0.1            # m/s - minimum approach speed
   include_non_approaching: false    # Only approaching pairs (interacting)
   min_avg_mdrac_threshold: 1.0      # m/s² - minimum avg MDRAC to keep (MDRAC uses 3.4)
@@ -44,12 +44,23 @@ prt:
 aggregation:
   method: 'average'  # 'average' or 'critical_moment'
   window_sec: 1.0    # Only used if method is 'critical_moment'
+  min_avg_frames: 3
+  max_frame_gap_sec: 0.5
 
 # Model Configuration
 model:
-  contamination: 0.1  # 10% of pairs flagged as anomalies
-  n_estimators: 100
-  random_state: 42
+  contamination: 0.0025  # 0.25% of pairs flagged as anomalies
+  n_estimators: 150
+  random_state: 2026
+  feature_cols:
+    - mdrac
+    - distance
+    - closing_speed
+    - closing_accel
+    - speed_diff
+    - ttc
+    - yaw_diff
+    - yaw_rate
   
 # Output
 output:

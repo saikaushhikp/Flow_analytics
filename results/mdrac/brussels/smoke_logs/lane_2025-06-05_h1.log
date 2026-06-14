@@ -2,18 +2,15 @@
 ======================================================================
 BRUSSELS TRAFFIC ANALYSIS
 ======================================================================
-Date: 2025-06-05 to 2025-06-05
+Date: 2025-06-05 00 to 2025-06-05
 Data: /home/kaushik/Kezual/Flow_analytics/data
 Output: /home/kaushik/Kezual/Flow_analytics/results/mdrac
 Smoke mode: max_hours=1
 ======================================================================
 
 Loading data...
-[MEMORY] Before loading: 169.8 MB
-
-Loading data:   0%|          | 0/1 [00:00<?, ?it/s]
-Loading data: 100%|██████████| 1/1 [00:00<00:00,  5.92it/s]
-Loading data: 100%|██████████| 1/1 [00:00<00:00,  5.91it/s]
+[MEMORY] Before loading: 169.9 MB
+Loading data:   0%|          | 0/1 [00:00<?, ?it/s]Loading data: 100%|██████████| 1/1 [00:00<00:00,  6.68it/s]Loading data: 100%|██████████| 1/1 [00:00<00:00,  6.66it/s]
 [DF MEMORY] Loaded data: 44.0 MB (756,104 rows)
 Loaded 756,104 records
 
@@ -29,40 +26,27 @@ Lifetime Filtering
 Footpath Zone Filtering
 ======================================================================
 Attaching footpath zones to 755,695 rows...
-[MEMORY] Before footpath zones: 420.7 MB
-
-Zone assignment batches:   0%|          | 0/8 [00:00<?, ?it/s]
-Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:01,  4.14it/s]
-Zone assignment batches:  38%|███▊      | 3/8 [00:00<00:00,  7.54it/s]
-Zone assignment batches:  62%|██████▎   | 5/8 [00:00<00:00,  9.14it/s]
-Zone assignment batches:  75%|███████▌  | 6/8 [00:00<00:00,  9.33it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00, 11.36it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00,  9.60it/s]
+[MEMORY] Before footpath zones: 416.5 MB
+Zone assignment batches:   0%|          | 0/8 [00:00<?, ?it/s]Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:00,  8.14it/s]Zone assignment batches:  25%|██▌       | 2/8 [00:00<00:00,  8.95it/s]Zone assignment batches:  38%|███▊      | 3/8 [00:00<00:00,  9.36it/s]Zone assignment batches:  50%|█████     | 4/8 [00:00<00:00,  9.14it/s]Zone assignment batches:  62%|██████▎   | 5/8 [00:00<00:00,  9.19it/s]Zone assignment batches:  75%|███████▌  | 6/8 [00:00<00:00,  8.71it/s]Zone assignment batches:  88%|████████▊ | 7/8 [00:00<00:00,  8.96it/s]Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00,  9.70it/s]
 /home/kaushik/Kezual/Flow_analytics/filters/preprocessing/zone_assignment.py:83: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
   result = pd.concat(output_chunks, ignore_index=True)
-[MEMORY] After footpath zones: 490.3 MB
+[MEMORY] After footpath zones: 483.3 MB
 ✓ Zones attached! Total rows: 755,695
 [footpath zone] Removed 2 objects
-[MEMORY] After footpath filter: 455.8 MB
+[MEMORY] After footpath filter: 448.8 MB
 
 ======================================================================
 Crosswalk Zone Filtering
 ======================================================================
 Attaching crosswalk zones to 747,160 rows...
-[MEMORY] Before crosswalk zones: 455.9 MB
-
-Zone assignment batches:   0%|          | 0/8 [00:00<?, ?it/s]
-Zone assignment batches:  25%|██▌       | 2/8 [00:00<00:00, 10.53it/s]
-Zone assignment batches:  50%|█████     | 4/8 [00:00<00:00, 11.01it/s]
-Zone assignment batches:  75%|███████▌  | 6/8 [00:00<00:00, 10.51it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00, 11.98it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00, 11.46it/s]
+[MEMORY] Before crosswalk zones: 448.9 MB
+Zone assignment batches:   0%|          | 0/8 [00:00<?, ?it/s]Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:00,  9.04it/s]Zone assignment batches:  38%|███▊      | 3/8 [00:00<00:00, 10.17it/s]Zone assignment batches:  62%|██████▎   | 5/8 [00:00<00:00, 10.13it/s]Zone assignment batches:  88%|████████▊ | 7/8 [00:00<00:00,  9.66it/s]Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00, 10.60it/s]
 /home/kaushik/Kezual/Flow_analytics/filters/preprocessing/zone_assignment.py:83: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
   result = pd.concat(output_chunks, ignore_index=True)
-[MEMORY] After crosswalk zones: 504.3 MB
+[MEMORY] After crosswalk zones: 499.6 MB
 ✓ Zones attached! Total rows: 747,160
 [crosswalk] Removed 0 parallel vehicles
-[MEMORY] After crosswalk filter: 504.5 MB
+[MEMORY] After crosswalk filter: 473.6 MB
 
 ======================================================================
 Static Object Removal
@@ -79,9 +63,7 @@ Lane Zone Assignment
 
 Assigning zones to 52,501 vehicles using spatial join...
 Processing in batches of 100,000 rows
-
-Zone assignment:   0%|          | 0/1 [00:00<?, ?it/s]
-Zone assignment: 100%|██████████| 1/1 [00:00<00:00, 12.01it/s]
+Zone assignment:   0%|          | 0/1 [00:00<?, ?it/s]Zone assignment: 100%|██████████| 1/1 [00:00<00:00, 14.83it/s]
 
 ✓ Zone assignment complete!
   Vehicles in zones: 17,232
@@ -105,24 +87,22 @@ M-DRAC Detection
 ======================================================================
 
 Generating nearby pairs...
-[MEMORY] Before pair generation: 475.3 MB
+[MEMORY] Before pair generation: 444.4 MB
   Filtered vehicles: 9,203
   Generating pairs (max_distance=8.0m)...
   Processing 7,932 timestamps (batch_size=5,000)
-
-  Pair generation:   0%|          | 0/2 [00:00<?, ?it/s]
-  Pair generation: 100%|██████████| 2/2 [00:00<00:00, 325.38it/s]
+  Pair generation:   0%|          | 0/2 [00:00<?, ?it/s]  Pair generation: 100%|██████████| 2/2 [00:00<00:00, 245.45it/s]
   Applying overlap filter (buffer=0.5m)...
   ✓ Generated 44 nearby pairs (after overlap filter)
   ✓ Added zone information (zone1/zone2 columns)
 ✓ Generated 44 base pairs
-[MEMORY] After pair generation: 509.2 MB
+[MEMORY] After pair generation: 478.5 MB
 
 Filtering pairs for M-DRAC...
   Label filter ([4, 6, 7, 8] × [4, 6, 7, 8]): 44 pairs
  Approaching pairs: 9
-  Zone filter (same lane): 1 pairs (filtered 8 different-lane)
-  Lateral filter (<= 1.8m): 0 pairs (filtered 1 not aligned)
+  Zone filter (same lane): 9 pairs (filtered 0 different-lane)
+  Lateral filter (<= 1.8m): 0 pairs (filtered 9 not aligned)
   ✓ Total filtered: 9 pairs | Remaining: 0 pairs
 ✓ M-DRAC pairs after filtering: 0
 
@@ -141,5 +121,5 @@ M-DRAC (Lanes): 0
 ======================================================================
 
 Note: For crosswalk pedestrian-vehicle detection, run: python regions/brussels/crosswalk_main.py
-$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/lane_main.py --start-date 2025-06-05 --end-date 2025-06-05 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 1
+$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/lane_main.py --start-date 2025-06-05 --start-time 00 --end-date 2025-06-05 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 1
 

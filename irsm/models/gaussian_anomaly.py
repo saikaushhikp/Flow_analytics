@@ -22,6 +22,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.stats import multivariate_normal, chi2
 from scipy.spatial.distance import mahalanobis
 import yaml
+from irsm.risk_vector import get_feature_names
 
 
 def load_irsm_config(config_path='irsm/irsm_config.yaml'):
@@ -178,7 +179,7 @@ def visualize_gaussian_results(df, normal_df, anomaly_df, output_dir):
     
     plt.tight_layout()
     plt.savefig(output_dir / 'gaussian_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  \N[CHECK MARK] Saved: {output_dir / 'gaussian_3d.png'}")
+    print(f"  \N{CHECK MARK} Saved: {output_dir / 'gaussian_3d.png'}")
     
     # Probability distribution histogram
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -210,7 +211,7 @@ def visualize_gaussian_results(df, normal_df, anomaly_df, output_dir):
     plt.suptitle('Multivariate Gaussian Analysis', fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
     plt.savefig(output_dir / 'gaussian_distributions.png', dpi=300, bbox_inches='tight')
-    print(f"  \N[CHECK MARK] Saved: {output_dir / 'gaussian_distributions.png'}")
+    print(f"  \N{CHECK MARK} Saved: {output_dir / 'gaussian_distributions.png'}")
 
 
 def run_gaussian_detection(data_path, output_dir, config):
@@ -232,7 +233,9 @@ def run_gaussian_detection(data_path, output_dir, config):
     print(f"Loaded: {len(df)} pairs")
     
     # Select features
-    features = ['mdrac', 'ttc', 'closing_speed']
+    features = [col for col in config['model'].get('feature_cols', get_feature_names()) if col in df.columns]
+    if not features:
+        raise ValueError("No configured IRSM feature columns are present in lanes.csv")
     X = df[features].values
     
     print(f"\nUsing features: {features}")
@@ -281,12 +284,12 @@ def run_gaussian_detection(data_path, output_dir, config):
     
     detections_file = output_path / 'gaussian_detections.csv'
     anomaly_df.to_csv(detections_file, index=False)
-    print(f"\n\N[CHECK MARK] Saved detections: {detections_file}")
+    print(f"\n\N{CHECK MARK} Saved detections: {detections_file}")
     
     # Save all results with scores
     results_file = output_path / 'gaussian_results.csv'
     df.to_csv(results_file, index=False)
-    print(f"\N[CHECK MARK] Saved results: {results_file}")
+    print(f"\N{CHECK MARK} Saved results: {results_file}")
     
     # Visualize
     print("\nCreating visualizations...")

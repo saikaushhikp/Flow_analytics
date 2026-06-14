@@ -34,6 +34,7 @@ def _date_range(start_date: str, end_date: str):
 def _run_pipeline(
     pipeline: str,
     date: str,
+    start_time: str,
     data_dir: Path,
     output_dir: Path,
     max_hours: int,
@@ -46,6 +47,8 @@ def _run_pipeline(
         str(script),
         "--start-date",
         date,
+        "--start-time",
+        start_time,
         "--end-date",
         date,
         "--data-dir",
@@ -76,6 +79,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run bounded Brussels M-DRAC smoke windows")
     parser.add_argument("--start-date", required=True, help="Start date, YYYY-MM-DD")
     parser.add_argument("--end-date", required=True, help="End date, YYYY-MM-DD")
+    parser.add_argument("--start-time", default="00", help="Start hour on the start date (HH or HH:MM)")
     parser.add_argument("--max-hours", type=int, default=1, help="Hourly folders per day to process")
     parser.add_argument("--data-dir", type=Path, default=brussels_data_dir(), help="Brussels parquet root")
     parser.add_argument("--output-dir", type=Path, default=output_root() / "mdrac", help="M-DRAC output root")
@@ -99,6 +103,7 @@ def main() -> None:
             log_path = _run_pipeline(
                 pipeline=pipeline,
                 date=date,
+                start_time=args.start_time,
                 data_dir=args.data_dir,
                 output_dir=args.output_dir,
                 max_hours=args.max_hours,

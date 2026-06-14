@@ -55,7 +55,7 @@ preprocessing:
   # Static Object Filter - removes stationary vehicles (parked cars)
   static_filter:
     enabled: true
-    min_speed: 0.5       # m/s - minimum sustained speed
+    min_speed: 0.3       # m/s - minimum sustained speed
     window_size: 10      # frames - window for checking sustained low speed
   
   # Ghost Filter - removes spawn/despawn artifacts
@@ -76,7 +76,7 @@ filters:
   vehicle_labels: [4, 6, 7, 8]  # car, van, truck, bus
   
   # Basic motion filters
-  min_vehicle_speed: 0.5     # m/s - filters stationary/parking vehicles
+  min_vehicle_speed: 0.3     # m/s - filters stationary/parking vehicles
   max_distance: 8.0          # m - maximum distance between vehicles to consider
   max_lateral_distance: 1.8  # m - maximum perpendicular distance
   
@@ -114,6 +114,7 @@ mdrac:
   # Temporal averaging parameters
   avg_window: 1.0          # seconds - rolling average window
   min_avg_frames: 3        # minimum frames required for sustained event
+  max_frame_gap: 0.5       # seconds - split event tracks across larger observation gaps
   
   # Zone-specific overrides
   zone_overrides:

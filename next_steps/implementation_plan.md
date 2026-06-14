@@ -16,10 +16,10 @@ Tasks:
 2. Remove hardcoded `/home/ubuntu/prem` assumptions.
    - Use repository-relative paths or environment variables.
    - Good defaults:
-     - `PREM_ROOT`
-     - `PREM_DATA_BRUSSELS`
-     - `PREM_DATA_OULU`
-     - `PREM_OUTPUT_ROOT`
+     - `FLOW_ANALYTICS_ROOT`
+     - `FLOW_ANALYTICS_DATA_BRUSSELS`
+     - `FLOW_ANALYTICS_DATA_OULU`
+     - `FLOW_ANALYTICS_OUTPUT_ROOT`
    - Keep CLI overrides for data/output paths.
 
 3. Restore/fix `utils.load_data`.

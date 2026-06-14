@@ -19,6 +19,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+import plotly.graph_objects as go
 import yaml
 
 
@@ -65,66 +66,60 @@ def visualize_risk_space(data_path, detections_path, output_dir, config):
     print(f"Anomaly pairs: {len(anomaly_pairs)}")
     
     # Create 3D scatter plot
-    fig = plt.figure(figsize=(12, 9))
-    ax = fig.add_subplot(111, projection='3d')
+    fig = go.Figure()
     
     # Plot normal pairs (blue)
-    ax.scatter(
-        normal_pairs['mdrac'],
-        normal_pairs['ttc'],
-        normal_pairs['closing_speed'],
-        c='cornflowerblue',
-        marker='o',
-        s=50,
-        alpha=0.6,
-        label=f'Normal ({len(normal_pairs)})',
-        edgecolors='navy',
-        linewidth=0.5
-    )
+    fig.add_trace(go.Scatter3d(
+        x=normal_pairs['mdrac'],
+        y=normal_pairs['ttc'],
+        z=normal_pairs['closing_speed'],
+        mode='markers',
+        name=f'Normal ({len(normal_pairs)})',
+        marker=dict(
+            size=5,
+            color='cornflowerblue',
+            opacity=0.6,
+            line=dict(width=0.5, color='navy'),
+            symbol='circle'
+        )
+    ))
     
     # Plot detected anomalies (red)
-    ax.scatter(
-        anomaly_pairs['mdrac'],
-        anomaly_pairs['ttc'],
-        anomaly_pairs['closing_speed'],
-        c='crimson',
-        marker='^',
-        s=100,
-        alpha=0.9,
-        label=f'Near-Miss ({len(anomaly_pairs)})',
-        edgecolors='darkred',
-        linewidth=1
-    )
+    fig.add_trace(go.Scatter3d(
+        x=anomaly_pairs['mdrac'],
+        y=anomaly_pairs['ttc'],
+        z=anomaly_pairs['closing_speed'],
+        mode='markers',
+        name=f'Near-Miss ({len(anomaly_pairs)})',
+        marker=dict(
+            size=8,
+            color='crimson',
+            opacity=0.9,
+            line=dict(width=1, color='darkred'),
+            symbol='diamond'
+        )
+    ))
     
     # Labels and title
-    ax.set_xlabel('MDRAC (m/s²)', fontsize=11, fontweight='bold')
-    ax.set_ylabel('TTC (seconds)', fontsize=11, fontweight='bold')
-    ax.set_zlabel('Closing Speed (m/s)', fontsize=11, fontweight='bold')
+    title_text = (f'IRSM Risk Vector Space Visualization<br>'
+                  f'Brussels {config["date"]} | {len(all_pairs)} pairs | '
+                  f'{len(anomaly_pairs)} anomalies ({len(anomaly_pairs)/len(all_pairs)*100:.1f}%)')
     
-    ax.set_title(
-        f'IRSM Risk Vector Space Visualization\n'
-        f'Brussels 2025-06-01 | {len(all_pairs)} pairs | '
-        f'{len(anomaly_pairs)} anomalies ({len(anomaly_pairs)/len(all_pairs)*100:.1f}%)',
-        fontsize=13,
-        fontweight='bold',
-        pad=20
+    fig.update_layout(
+        title=dict(text=title_text, font=dict(size=14, color="black")),
+        scene=dict(
+            xaxis_title='MDRAC (m/s²)',
+            yaxis_title='TTC (seconds)',
+            zaxis_title='Closing Speed (m/s)'
+        ),
+        legend=dict(x=0.8, y=0.9)
     )
     
-    # Legend
-    ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
-    
-    # Grid
-    ax.grid(True, alpha=0.3)
-    
-    # Improve viewing angle
-    ax.view_init(elev=20, azim=45)
-    
     # Save figure
-    output_path = Path(output_dir) / 'risk_space_3d.png'
+    output_path = Path(output_dir) / 'risk_space_3d.html'
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"\n\N[CHECK MARK] Saved: {output_path}")
+    fig.write_html(str(output_path))
+    print(f"\n\N{CHECK MARK} Saved: {output_path}")
     
     # Create additional 2D projections
     create_2d_projections(normal_pairs, anomaly_pairs, output_dir)
@@ -132,7 +127,8 @@ def visualize_risk_space(data_path, detections_path, output_dir, config):
     # Print statistics
     print_statistics(normal_pairs, anomaly_pairs)
     
-    plt.show()
+    # plt.show()
+    return 
 
 
 def create_2d_projections(normal_pairs, anomaly_pairs, output_dir):
@@ -175,11 +171,12 @@ def create_2d_projections(normal_pairs, anomaly_pairs, output_dir):
     
     plt.suptitle('IRSM 2D Projections of Risk Vector Space', 
                  fontsize=14, fontweight='bold', y=1.02)
-    plt.tight_layout()
+    # plt.tight_layout()
     
     output_path = Path(output_dir) / 'risk_space_2d_projections.png'
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"\N[CHECK MARK] Saved: {output_path}")
+    plt.savefig(output_path, dpi=500, bbox_inches='tight')
+    print(f"\N{CHECK MARK} Saved: {output_path}")
+    return
 
 
 def print_statistics(normal_pairs, anomaly_pairs):
@@ -212,6 +209,7 @@ def print_statistics(normal_pairs, anomaly_pairs):
         effect_size = abs(anomaly_mean - normal_mean) / pooled_std if pooled_std > 0 else 0
         
         print(f"  Effect size (Cohen's d): {effect_size:.2f}")
+    return
 
 
 if __name__ == '__main__':

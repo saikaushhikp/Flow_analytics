@@ -2,6 +2,8 @@
 
 This is the recommended order for taking the work forward. The first milestone should be "make the current repository runnable and reproducible", not new model work.
 
+Documented on 2026-05-25
+
 ## Milestone 1: Stabilize Runtime and Imports
 
 Goal: one-command imports and one-day smoke runs should work locally.
@@ -17,9 +19,9 @@ Tasks:
 2. Remove hardcoded `/home/ubuntu/prem` assumptions.
    - Use repository-relative paths or environment variables.
    - Good defaults:
-     - `PREM_ROOT`
-     - `PREM_DATA_BRUSSELS`
-     - `PREM_OUTPUT_ROOT`
+     - `FLOW_ANALYTICS_ROOT`
+     - `FLOW_ANALYTICS_DATA_BRUSSELS`
+     - `FLOW_ANALYTICS_OUTPUT_ROOT`
    - Keep CLI overrides for data/output paths.
 
 3. Restore/fix `utils.load_data`.

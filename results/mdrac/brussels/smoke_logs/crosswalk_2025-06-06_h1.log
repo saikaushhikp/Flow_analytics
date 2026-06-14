@@ -2,7 +2,7 @@
 ======================================================================
 BRUSSELS CROSSWALK PEDESTRIAN-VEHICLE DETECTION
 ======================================================================
-Date: 2025-06-06 to 2025-06-06
+Date: 2025-06-06 00 to 2025-06-06
 Data: /home/kaushik/Kezual/Flow_analytics/data
 Output: /home/kaushik/Kezual/Flow_analytics/results/mdrac
 Smoke mode: max_hours=1
@@ -10,10 +10,11 @@ Vehicle labels: [1, 2, 3, 4, 6, 7, 8]
 ======================================================================
 
 Loading data...
-[MEMORY] Before loading: 169.7 MB
+[MEMORY] Before loading: 170.3 MB
 
 Loading data:   0%|          | 0/1 [00:00<?, ?it/s]
-Loading data: 100%|██████████| 1/1 [00:00<00:00, 10.14it/s]
+Loading data: 100%|██████████| 1/1 [00:00<00:00,  8.63it/s]
+Loading data: 100%|██████████| 1/1 [00:00<00:00,  8.60it/s]
 [DF MEMORY] Loaded data: 45.6 MB (783,540 rows)
 Loaded 783,540 records
 
@@ -29,34 +30,35 @@ Lifetime Filtering
 Footpath Zone Filtering
 ======================================================================
 Attaching footpath zones to 783,223 rows...
-[MEMORY] Before footpath zones: 420.9 MB
+[MEMORY] Before footpath zones: 424.3 MB
 
 Zone assignment batches:   0%|          | 0/8 [00:00<?, ?it/s]
-Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:00,  8.52it/s]
-Zone assignment batches:  38%|███▊      | 3/8 [00:00<00:00,  9.37it/s]
-Zone assignment batches:  62%|██████▎   | 5/8 [00:00<00:00,  9.67it/s]
-Zone assignment batches:  75%|███████▌  | 6/8 [00:00<00:00,  9.50it/s]
-Zone assignment batches:  88%|████████▊ | 7/8 [00:00<00:00,  8.02it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00,  7.87it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00,  8.48it/s]
-[MEMORY] After footpath zones: 505.9 MB
+Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:00,  7.99it/s]
+Zone assignment batches:  25%|██▌       | 2/8 [00:00<00:00,  8.77it/s]
+Zone assignment batches:  50%|█████     | 4/8 [00:00<00:00,  9.70it/s]
+Zone assignment batches:  62%|██████▎   | 5/8 [00:00<00:00,  9.71it/s]
+Zone assignment batches:  75%|███████▌  | 6/8 [00:00<00:00,  8.98it/s]
+Zone assignment batches:  88%|████████▊ | 7/8 [00:00<00:00,  9.08it/s]
+Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00,  9.60it/s]
+[MEMORY] After footpath zones: 506.7 MB
 ✓ Zones attached! Total rows: 783,223
 [footpath zone] Removed 0 objects
-[MEMORY] After footpath filter: 452.6 MB
+[MEMORY] After footpath filter: 450.5 MB
 
 ======================================================================
 Crosswalk Zone Assignment
 ======================================================================
 Attaching crosswalk zones to 783,223 rows...
-[MEMORY] Before crosswalk zones: 452.6 MB
+[MEMORY] Before crosswalk zones: 450.6 MB
 
 Zone assignment batches:   0%|          | 0/8 [00:00<?, ?it/s]
-Zone assignment batches:  25%|██▌       | 2/8 [00:00<00:00, 10.44it/s]
-Zone assignment batches:  50%|█████     | 4/8 [00:00<00:00, 11.18it/s]
-Zone assignment batches:  75%|███████▌  | 6/8 [00:00<00:00, 11.24it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00, 12.56it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00, 11.96it/s]
-[MEMORY] After crosswalk zones: 509.6 MB
+Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:00,  8.76it/s]
+Zone assignment batches:  25%|██▌       | 2/8 [00:00<00:00,  9.33it/s]
+Zone assignment batches:  50%|█████     | 4/8 [00:00<00:00,  9.80it/s]
+Zone assignment batches:  75%|███████▌  | 6/8 [00:00<00:00,  9.48it/s]
+Zone assignment batches:  88%|████████▊ | 7/8 [00:00<00:00,  9.57it/s]
+Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00,  9.98it/s]
+[MEMORY] After crosswalk zones: 517.6 MB
 ✓ Zones attached! Total rows: 783,223
 
 Vehicles in crosswalk zones: 3,066
@@ -84,7 +86,7 @@ label
 7      31
 8      14
 Name: count, dtype: int64
-[MEMORY] After crosswalk zone filtering: 456.6 MB
+[MEMORY] After crosswalk zone filtering: 456.2 MB
 
 ======================================================================
 Static Object Removal
@@ -101,13 +103,13 @@ CROSSWALK PAIR GENERATION
 ======================================================================
 
 Generating pairs from 3,066 crosswalk vehicles...
-[MEMORY] Before pair generation: 456.8 MB
+[MEMORY] Before pair generation: 456.3 MB
   Filtered vehicles: 2,305
   Generating pairs (max_distance=8.0m)...
   Processing 2,216 timestamps (batch_size=5,000)
 
   Pair generation:   0%|          | 0/1 [00:00<?, ?it/s]
-  Pair generation: 100%|██████████| 1/1 [00:00<00:00, 448.16it/s]
+  Pair generation: 100%|██████████| 1/1 [00:00<00:00, 355.21it/s]
   Applying overlap filter (buffer=0.5m)...
   ✓ Generated 12 nearby pairs (after overlap filter)
   ✓ Added zone information (zone1/zone2 columns)
@@ -119,7 +121,7 @@ Applying MDRAC filters with ped-vehicle label sets...
   Label filter ([1] × [4, 6, 7, 8, 3, 2]): 0 pairs
   ✓ After MDRAC filters: 0 pairs
 
-⚠️  No crosswalk ped-vehicle pairs after filtering.
+!  No crosswalk ped-vehicle pairs after filtering.
 ✓ Saved 0 conflicts to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/crosswalks/2025-06-06/mdrac_2025-06-06.csv
 
 ✓ Saved to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/crosswalks/2025-06-06/mdrac_2025-06-06.csv
@@ -129,5 +131,5 @@ CROSSWALK ANALYSIS COMPLETE
 ======================================================================
 Total Conflicts: 0
 ======================================================================
-$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/crosswalk_main.py --start-date 2025-06-06 --end-date 2025-06-06 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 1
+$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/crosswalk_main.py --start-date 2025-06-06 --start-time 00 --end-date 2025-06-06 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 1
 

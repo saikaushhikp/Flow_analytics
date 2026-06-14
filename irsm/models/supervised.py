@@ -235,7 +235,7 @@ def train_models():
             
             results[name] = {'val': val_metrics, 'test': test_metrics}
         else:
-            print(f"\n✗ Failed validation (AUC < {VAL_AUC_THRESHOLD})")
+            print(f"\nX Failed validation (AUC < {VAL_AUC_THRESHOLD})")
     
     # Save results
     if results:
@@ -263,7 +263,7 @@ def run_supervised_detection(data_path, output_dir, model_name='xgboost', thresh
     
     # Load data
     if not Path(data_path).exists():
-        print(f"\n✗ Data file not found: {data_path}")
+        print(f"\nX Data file not found: {data_path}")
         return
     
     print(f"\nLoading: {data_path}")
@@ -273,7 +273,7 @@ def run_supervised_detection(data_path, output_dir, model_name='xgboost', thresh
     # Check features
     missing = set(FEATURES) - set(df.columns)
     if missing:
-        print(f"\n✗ Missing features: {missing}")
+        print(f"\nX Missing features: {missing}")
         return
     
     # Load model
@@ -281,7 +281,7 @@ def run_supervised_detection(data_path, output_dir, model_name='xgboost', thresh
         classifier = SupervisedClassifier.load_default(model_name)
         print(f"\n✓ Loaded: {classifier}")
     except FileNotFoundError as e:
-        print(f"\n✗ Model not found: {e}")
+        print(f"\nX Model not found: {e}")
         print("   Train first: python3 irsm/models/supervised.py --train")
         return
     
@@ -340,4 +340,4 @@ if __name__ == '__main__':
             try:
                 run_supervised_detection(data_path, output_dir, model_name)
             except Exception as e:
-                print(f"\n✗ Error with {model_name}: {e}")
+                print(f"\nX Error with {model_name}: {e}")

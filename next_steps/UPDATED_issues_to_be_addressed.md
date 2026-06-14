@@ -2,7 +2,7 @@
 
 This file lists issues found by going through the entire current codebase and running lightweight checks  
 
-Documented on 2026-05-21
+Documented on 2026-05-25
 
 ## Resolution Status as of 2026-05-27
 

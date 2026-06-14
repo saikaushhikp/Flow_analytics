@@ -2,7 +2,7 @@
 ======================================================================
 BRUSSELS CROSSWALK PEDESTRIAN-VEHICLE DETECTION
 ======================================================================
-Date: 2025-06-05 to 2025-06-05
+Date: 2025-06-05 00 to 2025-06-05
 Data: /home/kaushik/Kezual/Flow_analytics/data
 Output: /home/kaushik/Kezual/Flow_analytics/results/mdrac
 Smoke mode: max_hours=1
@@ -13,8 +13,8 @@ Loading data...
 [MEMORY] Before loading: 170.3 MB
 
 Loading data:   0%|          | 0/1 [00:00<?, ?it/s]
-Loading data: 100%|██████████| 1/1 [00:00<00:00,  9.35it/s]
-Loading data: 100%|██████████| 1/1 [00:00<00:00,  9.33it/s]
+Loading data: 100%|██████████| 1/1 [00:00<00:00,  7.84it/s]
+Loading data: 100%|██████████| 1/1 [00:00<00:00,  7.82it/s]
 [DF MEMORY] Loaded data: 44.0 MB (756,104 rows)
 Loaded 756,104 records
 
@@ -30,36 +30,42 @@ Lifetime Filtering
 Footpath Zone Filtering
 ======================================================================
 Attaching footpath zones to 755,695 rows...
-[MEMORY] Before footpath zones: 416.8 MB
+[MEMORY] Before footpath zones: 422.9 MB
 
 Zone assignment batches:   0%|          | 0/8 [00:00<?, ?it/s]
-Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:00,  7.50it/s]
-Zone assignment batches:  38%|███▊      | 3/8 [00:00<00:00,  9.41it/s]
-Zone assignment batches:  62%|██████▎   | 5/8 [00:00<00:00, 10.21it/s]
-Zone assignment batches:  88%|████████▊ | 7/8 [00:00<00:00, 10.17it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00, 10.73it/s]
+Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:00,  8.08it/s]
+Zone assignment batches:  25%|██▌       | 2/8 [00:00<00:00,  8.92it/s]
+Zone assignment batches:  38%|███▊      | 3/8 [00:00<00:00,  9.15it/s]
+Zone assignment batches:  50%|█████     | 4/8 [00:00<00:00,  9.28it/s]
+Zone assignment batches:  62%|██████▎   | 5/8 [00:00<00:00,  9.32it/s]
+Zone assignment batches:  75%|███████▌  | 6/8 [00:00<00:00,  8.80it/s]
+Zone assignment batches:  88%|████████▊ | 7/8 [00:00<00:00,  9.02it/s]
+Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00,  9.77it/s]
 /home/kaushik/Kezual/Flow_analytics/filters/preprocessing/zone_assignment.py:83: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
   result = pd.concat(output_chunks, ignore_index=True)
-[MEMORY] After footpath zones: 492.4 MB
+[MEMORY] After footpath zones: 510.0 MB
 ✓ Zones attached! Total rows: 755,695
 [footpath zone] Removed 2 objects
-[MEMORY] After footpath filter: 457.9 MB
+[MEMORY] After footpath filter: 416.2 MB
 
 ======================================================================
 Crosswalk Zone Assignment
 ======================================================================
 Attaching crosswalk zones to 747,160 rows...
-[MEMORY] Before crosswalk zones: 458.0 MB
+[MEMORY] Before crosswalk zones: 416.2 MB
 
 Zone assignment batches:   0%|          | 0/8 [00:00<?, ?it/s]
-Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:00,  9.32it/s]
-Zone assignment batches:  38%|███▊      | 3/8 [00:00<00:00, 10.79it/s]
-Zone assignment batches:  62%|██████▎   | 5/8 [00:00<00:00, 11.22it/s]
-Zone assignment batches:  88%|████████▊ | 7/8 [00:00<00:00, 10.82it/s]
-Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00, 11.73it/s]
+Zone assignment batches:  12%|█▎        | 1/8 [00:00<00:00,  8.12it/s]
+Zone assignment batches:  25%|██▌       | 2/8 [00:00<00:00,  8.63it/s]
+Zone assignment batches:  38%|███▊      | 3/8 [00:00<00:00,  8.35it/s]
+Zone assignment batches:  50%|█████     | 4/8 [00:00<00:00,  7.96it/s]
+Zone assignment batches:  62%|██████▎   | 5/8 [00:00<00:00,  7.66it/s]
+Zone assignment batches:  75%|███████▌  | 6/8 [00:00<00:00,  7.19it/s]
+Zone assignment batches:  88%|████████▊ | 7/8 [00:00<00:00,  7.30it/s]
+Zone assignment batches: 100%|██████████| 8/8 [00:00<00:00,  8.21it/s]
 /home/kaushik/Kezual/Flow_analytics/filters/preprocessing/zone_assignment.py:83: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
   result = pd.concat(output_chunks, ignore_index=True)
-[MEMORY] After crosswalk zones: 500.6 MB
+[MEMORY] After crosswalk zones: 505.6 MB
 ✓ Zones attached! Total rows: 747,160
 
 Vehicles in crosswalk zones: 1,986
@@ -89,7 +95,7 @@ label
 8      14
 2       9
 Name: count, dtype: int64
-[MEMORY] After crosswalk zone filtering: 444.6 MB
+[MEMORY] After crosswalk zone filtering: 432.5 MB
 
 ======================================================================
 Static Object Removal
@@ -106,13 +112,13 @@ CROSSWALK PAIR GENERATION
 ======================================================================
 
 Generating pairs from 1,986 crosswalk vehicles...
-[MEMORY] Before pair generation: 444.7 MB
+[MEMORY] Before pair generation: 432.7 MB
   Filtered vehicles: 1,941
   Generating pairs (max_distance=8.0m)...
   Processing 1,887 timestamps (batch_size=5,000)
 
   Pair generation:   0%|          | 0/1 [00:00<?, ?it/s]
-  Pair generation: 100%|██████████| 1/1 [00:00<00:00, 460.91it/s]
+  Pair generation: 100%|██████████| 1/1 [00:00<00:00, 436.77it/s]
   Applying overlap filter (buffer=0.5m)...
   ✓ Generated 2 nearby pairs (after overlap filter)
   ✓ Added zone information (zone1/zone2 columns)
@@ -124,7 +130,7 @@ Applying MDRAC filters with ped-vehicle label sets...
   Label filter ([1] × [4, 6, 7, 8, 3, 2]): 0 pairs
   ✓ After MDRAC filters: 0 pairs
 
-⚠️  No crosswalk ped-vehicle pairs after filtering.
+!  No crosswalk ped-vehicle pairs after filtering.
 ✓ Saved 0 conflicts to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/crosswalks/2025-06-05/mdrac_2025-06-05.csv
 
 ✓ Saved to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/crosswalks/2025-06-05/mdrac_2025-06-05.csv
@@ -134,5 +140,5 @@ CROSSWALK ANALYSIS COMPLETE
 ======================================================================
 Total Conflicts: 0
 ======================================================================
-$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/crosswalk_main.py --start-date 2025-06-05 --end-date 2025-06-05 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 1
+$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/crosswalk_main.py --start-date 2025-06-05 --start-time 00 --end-date 2025-06-05 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 1
 

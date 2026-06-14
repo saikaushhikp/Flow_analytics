@@ -44,12 +44,14 @@ from ssm.m_drac import ModifiedDRAC
 parser = argparse.ArgumentParser(description='Brussels Crosswalk Pedestrian-Vehicle Detection')
 parser.add_argument('--start-date', type=str, default="2025-06-10",
                     help='Start date (YYYY-MM-DD). Default: 2025-06-10')
+parser.add_argument('--start-time', type=str, default="00",
+                    help='Start hour on the start date (HH or HH:MM). Default: 00')
 parser.add_argument('--end-date', type=str, default="2025-06-10",
                     help='End date (YYYY-MM-DD). Default: 2025-06-10')
 parser.add_argument('--data-dir', type=str, default=str(brussels_data_dir()),
-                    help='Trajectory parquet root. Defaults to PREM_DATA_BRUSSELS.')
+                    help='Trajectory parquet root. Defaults to FLOW_ANALYTICS_DATA_BRUSSELS.')
 parser.add_argument('--output-dir', type=str, default=str(output_root() / 'mdrac'),
-                    help='Detection output root. Defaults to PREM_OUTPUT_ROOT/mdrac.')
+                    help='Detection output root. Defaults to FLOW_ANALYTICS_OUTPUT_ROOT/mdrac.')
 parser.add_argument('--config', type=str, default=str(default_config_path()),
                     help='Path to config.yaml.')
 parser.add_argument('--max-hours', type=int, default=None,
@@ -73,7 +75,7 @@ config['filters']['min_vehicle_speed'] = 0.3  # Lower threshold for pedestrians 
 print("="*70)
 print("BRUSSELS CROSSWALK PEDESTRIAN-VEHICLE DETECTION")
 print("="*70)
-print(f"Date: {START_DATE} to {END_DATE}")
+print(f"Date: {START_DATE} {args.start_time} to {END_DATE}")
 print(f"Data: {DATA_DIR}")
 print(f"Output: {OUTPUT_DIR}")
 if args.max_hours:
@@ -93,6 +95,7 @@ df = load_data(
     DATA_DIR,
     START_DATE,
     END_DATE,
+    start_time=args.start_time,
     dtypes=config['data']['dtypes'],
     max_hours=args.max_hours,
     sample_limit=args.sample_limit,
@@ -130,7 +133,7 @@ log_memory("Before footpath zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After footpath zones")
-print(f"\N[CHECK MARK] Zones attached! Total rows: {len(df):,}")
+print(f"\N{CHECK MARK} Zones attached! Total rows: {len(df):,}")
 
 df = apply_footpath_zone_filter(df)
 df = df.drop(columns=['zone'], errors='ignore')
@@ -156,7 +159,7 @@ log_memory("Before crosswalk zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After crosswalk zones")
-print(f"\N[CHECK MARK] Zones attached! Total rows: {len(df):,}")
+print(f"\N{CHECK MARK} Zones attached! Total rows: {len(df):,}")
 
 # Filter parallel vehicles (vehicles moving parallel to crosswalk, not crossing)
 removed_ids_global = []
@@ -216,7 +219,7 @@ if len(df_crosswalk) > 0:
     
     # Generate nearby pairs within crosswalk zones
     crosswalk_base = find_all_nearby_pairs(df_crosswalk, config)
-    print(f"  \N[CHECK MARK] Generated {len(crosswalk_base):,} nearby pairs")
+    print(f"  \N{CHECK MARK} Generated {len(crosswalk_base):,} nearby pairs")
     
     # Clean up
     del df_crosswalk
@@ -235,7 +238,7 @@ if len(df_crosswalk) > 0:
             label_sets=([1], [4, 6, 7, 8, 3, 2]),  # Ped × Vehicles
             skip_same_lane_filter=True  # Critical for crossing detection
         )
-        print(f"  \N[CHECK MARK] After MDRAC filters: {len(crosswalk_pairs):,} pairs")
+        print(f"  \N{CHECK MARK} After MDRAC filters: {len(crosswalk_pairs):,} pairs")
         
         # Clean up
         del crosswalk_base
@@ -266,17 +269,17 @@ if len(df_crosswalk) > 0:
             gc.collect()
             
             if len(crosswalk_conflicts) == 0:
-                print("\n⚠️  No conflicts detected above threshold.")
+                print("\n!  No conflicts detected above threshold.")
         else:
-            print("\n⚠️  No crosswalk ped-vehicle pairs after filtering.")
+            print("\n!  No crosswalk ped-vehicle pairs after filtering.")
             del crosswalk_pairs
             gc.collect()
     else:
-        print("\n⚠️  No nearby pairs found in crosswalk zones.")
+        print("\n!  No nearby pairs found in crosswalk zones.")
         del crosswalk_base
         gc.collect()
 else:
-    print("\n⚠️  No vehicles in crosswalk zones.")
+    print("\n!  No vehicles in crosswalk zones.")
 
 crosswalk_path = save_detection_results(
     crosswalk_conflicts,
@@ -286,7 +289,7 @@ crosswalk_path = save_detection_results(
     START_DATE,
     zone_name='crosswalks'
 )
-print(f"\n\N[CHECK MARK] Saved to {crosswalk_path}")
+print(f"\n\N{CHECK MARK} Saved to {crosswalk_path}")
 
 print("\n" + "="*70)
 print("CROSSWALK ANALYSIS COMPLETE")

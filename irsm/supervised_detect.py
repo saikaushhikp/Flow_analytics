@@ -53,7 +53,7 @@ def detect_near_misses(data_path, output_dir, models, threshold=0.5):
     # Load data
     data_path = Path(data_path)
     if not data_path.exists():
-        print(f"\n✗ Data file not found: {data_path}")
+        print(f"\nX Data file not found: {data_path}")
         return
     
     print(f"\nLoading data: {data_path}")
@@ -79,7 +79,7 @@ def detect_near_misses(data_path, output_dir, models, threshold=0.5):
         try:
             # Load model
             classifier = SupervisedClassifier.load_default(model_name)
-            print(f"\N[CHECK MARK] Loaded model")
+            print(f"\N{CHECK MARK} Loaded model")
             
             # Predict
             print(f"Running predictions...")
@@ -127,10 +127,10 @@ def detect_near_misses(data_path, output_dir, models, threshold=0.5):
             })
             
         except FileNotFoundError as e:
-            print(f"\n✗ Model not found: {e}")
+            print(f"\nX Model not found: {e}")
             print(f"   Train first: python3 irsm/models/supervised.py --train")
         except Exception as e:
-            print(f"\n✗ Error: {e}")
+            print(f"\nX Error: {e}")
             import traceback
             traceback.print_exc()
     
@@ -154,7 +154,7 @@ def detect_near_misses(data_path, output_dir, models, threshold=0.5):
             print(f"  - {result['output_file']}")
     
     print(f"\n{'='*70}")
-    print("\N[CHECK MARK] DETECTION COMPLETE")
+    print("\N{CHECK MARK} DETECTION COMPLETE")
     print(f"{'='*70}\n")
 
 
