@@ -88,7 +88,7 @@ def compare_outputs(
     if top_irsm.empty:
         lines.append("No IRSM rows available.")
     else:
-        display_cols = [col for col in ["pair_id", "timestamp", "mdrac", "ttc", "closing_speed", "anomaly_score"] if col in top_irsm.columns]
+        display_cols = [col for col in ["pair_id", "timestamp", "mdrac", "ttc", "closing_speed", "link", "anomaly_score"] if col in top_irsm.columns]
         lines.append("| " + " | ".join(display_cols) + " |")
         lines.append("| " + " | ".join(["---"] * len(display_cols)) + " |")
         for _, row in top_irsm[display_cols].iterrows():

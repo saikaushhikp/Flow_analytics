@@ -1,125 +1,0 @@
-[SSM] Numba enabled with 15 threads
-======================================================================
-BRUSSELS TRAFFIC ANALYSIS
-======================================================================
-Date: 2025-06-03 00 to 2025-06-03
-Data: /home/kaushik/Kezual/Flow_analytics/data
-Output: /home/kaushik/Kezual/Flow_analytics/results/mdrac
-Smoke mode: max_hours=1
-======================================================================
-
-Loading data...
-[MEMORY] Before loading: 169.6 MB
-Loading data:   0%|          | 0/1 [00:00<?, ?it/s]Loading data: 100%|██████████| 1/1 [00:00<00:00,  6.33it/s]Loading data: 100%|██████████| 1/1 [00:00<00:00,  6.32it/s]
-[DF MEMORY] Loaded data: 57.5 MB (987,938 rows)
-Loaded 987,938 records
-
-======================================================================
-Lifetime Filtering
-======================================================================
-[lifespan filter] Removed 6 short-lived IDs
-  Before: 240 IDs (987,938 rows)
-  After: 234 IDs (987,481 rows)
-[DF MEMORY] After lifetime filter: 65.0 MB (987,481 rows)
-
-======================================================================
-Footpath Zone Filtering
-======================================================================
-Attaching footpath zones to 987,481 rows...
-[MEMORY] Before footpath zones: 465.1 MB
-Zone assignment batches:   0%|          | 0/10 [00:00<?, ?it/s]Zone assignment batches:  10%|█         | 1/10 [00:00<00:02,  4.10it/s]Zone assignment batches:  20%|██        | 2/10 [00:00<00:01,  4.20it/s]Zone assignment batches:  30%|███       | 3/10 [00:00<00:01,  4.22it/s]Zone assignment batches:  40%|████      | 4/10 [00:00<00:01,  4.29it/s]Zone assignment batches:  50%|█████     | 5/10 [00:01<00:01,  4.89it/s]Zone assignment batches:  60%|██████    | 6/10 [00:01<00:00,  5.42it/s]Zone assignment batches:  70%|███████   | 7/10 [00:01<00:00,  6.12it/s]Zone assignment batches:  80%|████████  | 8/10 [00:01<00:00,  6.82it/s]Zone assignment batches:  90%|█████████ | 9/10 [00:01<00:00,  7.19it/s]Zone assignment batches: 100%|██████████| 10/10 [00:01<00:00,  7.60it/s]Zone assignment batches: 100%|██████████| 10/10 [00:01<00:00,  5.85it/s]
-[MEMORY] After footpath zones: 560.7 MB
-✓ Zones attached! Total rows: 987,481
-[footpath zone] Removed 0 objects
-[MEMORY] After footpath filter: 515.6 MB
-
-======================================================================
-Crosswalk Zone Filtering
-======================================================================
-Attaching crosswalk zones to 987,481 rows...
-[MEMORY] Before crosswalk zones: 515.7 MB
-Zone assignment batches:   0%|          | 0/10 [00:00<?, ?it/s]Zone assignment batches:  10%|█         | 1/10 [00:00<00:01,  7.33it/s]Zone assignment batches:  20%|██        | 2/10 [00:00<00:01,  5.36it/s]Zone assignment batches:  30%|███       | 3/10 [00:00<00:01,  5.24it/s]Zone assignment batches:  40%|████      | 4/10 [00:00<00:01,  5.94it/s]Zone assignment batches:  50%|█████     | 5/10 [00:00<00:00,  6.84it/s]Zone assignment batches:  60%|██████    | 6/10 [00:00<00:00,  7.18it/s]Zone assignment batches:  70%|███████   | 7/10 [00:01<00:00,  7.72it/s]Zone assignment batches:  80%|████████  | 8/10 [00:01<00:00,  8.00it/s]Zone assignment batches:  90%|█████████ | 9/10 [00:01<00:00,  8.22it/s]Zone assignment batches: 100%|██████████| 10/10 [00:01<00:00,  8.55it/s]Zone assignment batches: 100%|██████████| 10/10 [00:01<00:00,  7.32it/s]
-[MEMORY] After crosswalk zones: 570.4 MB
-✓ Zones attached! Total rows: 987,481
-[crosswalk] Removed 0 parallel vehicles
-[MEMORY] After crosswalk filter: 570.5 MB
-
-======================================================================
-Static Object Removal
-======================================================================
-[static filter] Found 51 static objects
-[static filter] Removed 51 static objects
-  Before: 234 IDs (987,481 rows)
-  After: 183 IDs (91,495 rows)
-[DF MEMORY] After static filter: 6.0 MB (91,495 rows)
-
-======================================================================
-Lane Zone Assignment
-======================================================================
-
-Assigning zones to 91,495 vehicles using spatial join...
-Processing in batches of 100,000 rows
-Zone assignment:   0%|          | 0/1 [00:00<?, ?it/s]Zone assignment: 100%|██████████| 1/1 [00:00<00:00,  9.23it/s]Zone assignment: 100%|██████████| 1/1 [00:00<00:00,  9.21it/s]
-
-✓ Zone assignment complete!
-  Vehicles in zones: 18,287
-  Vehicles outside zones: 73,671
-zone
-unknown    73671
-E-L1        6808
-B-L2        4626
-E-L2        3393
-C-L1        2209
-D-L1         636
-B-L1         463
-D-L2          72
-A-L1          54
-C-L2          26
-Name: count, dtype: int64
-
-Vehicles in lanes: 18,287
-[DF MEMORY] Lane vehicles: 2.3 MB (18,287 rows)
-
-======================================================================
-M-DRAC Detection
-======================================================================
-
-Generating nearby pairs...
-[MEMORY] Before pair generation: 528.9 MB
-  Filtered vehicles: 10,786
-  Generating pairs (max_distance=8.0m)...
-  Processing 8,477 timestamps (batch_size=5,000)
-  Pair generation:   0%|          | 0/2 [00:00<?, ?it/s]  Pair generation: 100%|██████████| 2/2 [00:00<00:00, 221.02it/s]
-  Applying overlap filter (buffer=0.5m)...
-  ✓ Generated 139 nearby pairs (after overlap filter)
-  ✓ Added zone information (zone1/zone2 columns)
-✓ Generated 139 base pairs
-[MEMORY] After pair generation: 566.7 MB
-
-Filtering pairs for M-DRAC...
-  Label filter ([4, 6, 7, 8] × [4, 6, 7, 8]): 139 pairs
- Approaching pairs: 41
-  Zone filter (same lane): 36 pairs (filtered 5 different-lane)
-  Lateral filter (<= 1.8m): 9 pairs (filtered 27 not aligned)
-  ✓ Total filtered: 32 pairs | Remaining: 9 pairs
-  Speed diff > 0.5: 9
-  Final MDRAC pairs: 0
-✓ M-DRAC pairs after filtering: 0
-
-Detecting M-DRAC conflicts...
-
-======================================================================
-M-DRAC Conflicts: 0
-======================================================================
-✓ Saved 0 conflicts to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/lanes/2025-06-03/mdrac_2025-06-03.csv
-Saved to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/lanes/2025-06-03/mdrac_2025-06-03.csv
-
-======================================================================
-BRUSSELS LANE ANALYSIS COMPLETE
-======================================================================
-M-DRAC (Lanes): 0
-======================================================================
-
-Note: For crosswalk pedestrian-vehicle detection, run: python regions/brussels/crosswalk_main.py
-$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/lane_main.py --start-date 2025-06-03 --start-time 00 --end-date 2025-06-03 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 1
-

@@ -22,6 +22,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.stats import multivariate_normal, chi2
 from scipy.spatial.distance import mahalanobis
 import yaml
+import plotly.graph_objects as go
 from irsm.risk_vector import get_feature_names
 
 
@@ -81,7 +82,7 @@ class GaussianAnomalyDetector:
             self.sigma_inv = np.linalg.pinv(self.sigma)
         
         # Calculate probabilities for threshold
-        model = multivariate_normal(mean=self.mu, cov=self.sigma)
+        model = multivariate_normal(mean=self.mu, cov=self.sigma, allow_singular=True)
         probabilities = model.pdf(X)
         
         if self.method == 'percentile':
@@ -106,7 +107,7 @@ class GaussianAnomalyDetector:
             predictions: -1 for anomaly, 1 for normal
         """
         if self.method == 'percentile':
-            model = multivariate_normal(mean=self.mu, cov=self.sigma)
+            model = multivariate_normal(mean=self.mu, cov=self.sigma, allow_singular=True)
             probabilities = model.pdf(X)
             predictions = np.where(probabilities < self.threshold, -1, 1)
         else:  # mahalanobis
@@ -122,7 +123,7 @@ class GaussianAnomalyDetector:
         Returns:
             probabilities: probability density for each sample
         """
-        model = multivariate_normal(mean=self.mu, cov=self.sigma)
+        model = multivariate_normal(mean=self.mu, cov=self.sigma, allow_singular=True)
         return model.pdf(X)
     
     def get_mahalanobis_distances(self, X):
@@ -130,56 +131,58 @@ class GaussianAnomalyDetector:
         return np.array([mahalanobis(x, self.mu, self.sigma_inv) for x in X])
 
 
-def visualize_gaussian_results(df, normal_df, anomaly_df, output_dir):
+def visualize_gaussian_results(df, normal_df, anomaly_df, threshold, output_dir):
     """Create visualization of Gaussian detection results"""
     
-    # 3D scatter plot
-    fig = plt.figure(figsize=(12, 9))
-    ax = fig.add_subplot(111, projection='3d')
+    # 3D scatter plot with plotly
+    fig = go.Figure()
     
     # Plot normal pairs
-    ax.scatter(
-        normal_df['mdrac'],
-        normal_df['ttc'],
-        normal_df['closing_speed'],
-        c='cornflowerblue',
-        marker='o',
-        s=50,
-        alpha=0.6,
-        label=f'Normal ({len(normal_df)})',
-        edgecolors='navy',
-        linewidth=0.5
-    )
+    fig.add_trace(go.Scatter3d(
+        x=normal_df['mdrac'],
+        y=normal_df['ttc'],
+        z=normal_df['closing_speed'],
+        mode='markers',
+        name=f'Normal ({len(normal_df)})',
+        marker=dict(
+            color='cornflowerblue',
+            size=5,
+            symbol='circle',
+            opacity=0.6,
+            line=dict(color='navy', width=0.5)
+        )
+    ))
     
     # Plot anomalies
-    ax.scatter(
-        anomaly_df['mdrac'],
-        anomaly_df['ttc'],
-        anomaly_df['closing_speed'],
-        c='crimson',
-        marker='^',
-        s=100,
-        alpha=0.9,
-        label=f'Anomaly ({len(anomaly_df)})',
-        edgecolors='darkred',
-        linewidth=1
+    fig.add_trace(go.Scatter3d(
+        x=anomaly_df['mdrac'],
+        y=anomaly_df['ttc'],
+        z=anomaly_df['closing_speed'],
+        mode='markers',
+        name=f'Anomaly ({len(anomaly_df)})',
+        marker=dict(
+            color='crimson',
+            size=8,
+            symbol='diamond',
+            opacity=0.9,
+            line=dict(color='darkred', width=1)
+        )
+    ))
+    
+    fig.update_layout(
+        title=f'Multivariate Gaussian Anomaly Detection<br>{len(df)} pairs | {len(anomaly_df)} anomalies ({len(anomaly_df)/len(df)*100:.1f}%)',
+        scene=dict(
+            xaxis_title='MDRAC (m/s²)',
+            yaxis_title='TTC (seconds)',
+            zaxis_title='Closing Speed (m/s)'
+        ),
+        legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
+        margin=dict(l=0, r=0, b=0, t=50)
     )
     
-    ax.set_xlabel('MDRAC (m/s²)', fontsize=11, fontweight='bold')
-    ax.set_ylabel('TTC (seconds)', fontsize=11, fontweight='bold')
-    ax.set_zlabel('Closing Speed (m/s)', fontsize=11, fontweight='bold')
-    ax.set_title(
-        f'Multivariate Gaussian Anomaly Detection\n'
-        f'{len(df)} pairs | {len(anomaly_df)} anomalies ({len(anomaly_df)/len(df)*100:.1f}%)',
-        fontsize=13, fontweight='bold', pad=20
-    )
-    ax.legend(loc='upper right', fontsize=10)
-    ax.grid(True, alpha=0.3)
-    ax.view_init(elev=20, azim=45)
-    
-    plt.tight_layout()
-    plt.savefig(output_dir / 'gaussian_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  \N{CHECK MARK} Saved: {output_dir / 'gaussian_3d.png'}")
+    output_html = output_dir / 'gaussian_3d.html'
+    fig.write_html(str(output_html))
+    print(f"  \N{CHECK MARK} Saved: {output_html}")
     
     # Probability distribution histogram
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -189,13 +192,14 @@ def visualize_gaussian_results(df, normal_df, anomaly_df, output_dir):
                  bins=30, alpha=0.7, color='cornflowerblue', label='Normal', edgecolor='navy')
     axes[0].hist(df[df['prediction'] == -1]['log_probability'], 
                  bins=30, alpha=0.7, color='crimson', label='Anomaly', edgecolor='darkred')
-    axes[0].axvline(np.log(df['probability'].iloc[0]), color='red', linestyle='--', 
+    axes[0].axvline(np.log(threshold + 1e-300), color='red', linestyle='--', 
                     linewidth=2, label='Threshold')
     axes[0].set_xlabel('Log Probability', fontweight='bold')
     axes[0].set_ylabel('Frequency', fontweight='bold')
+    axes[0].set_yscale('log')
     axes[0].set_title('Probability Distribution', fontweight='bold')
     axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
+    axes[0].grid(True, alpha=0.3, which='both')
     
     # Mahalanobis distance distribution
     axes[1].hist(df[df['prediction'] == 1]['mahalanobis_distance'], 
@@ -210,7 +214,7 @@ def visualize_gaussian_results(df, normal_df, anomaly_df, output_dir):
     
     plt.suptitle('Multivariate Gaussian Analysis', fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
-    plt.savefig(output_dir / 'gaussian_distributions.png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_dir / 'gaussian_distributions.png', dpi=500, bbox_inches='tight')
     print(f"  \N{CHECK MARK} Saved: {output_dir / 'gaussian_distributions.png'}")
 
 
@@ -236,7 +240,14 @@ def run_gaussian_detection(data_path, output_dir, config):
     features = [col for col in config['model'].get('feature_cols', get_feature_names()) if col in df.columns]
     if not features:
         raise ValueError("No configured IRSM feature columns are present in lanes.csv")
-    X = df[features].values
+    
+    # Clean and cast features to numeric, fill NaNs
+    features_df = df[features].copy()
+    for col in features_df.columns:
+        if features_df[col].dtype == object or features_df[col].dtype == bool:
+            features_df[col] = pd.to_numeric(features_df[col], errors='coerce')
+    features_df = features_df.fillna(features_df.median()).fillna(0.0)
+    X = features_df.values.astype(np.float64)
     
     print(f"\nUsing features: {features}")
     print(f"Feature ranges:")
@@ -293,11 +304,12 @@ def run_gaussian_detection(data_path, output_dir, config):
     
     # Visualize
     print("\nCreating visualizations...")
-    visualize_gaussian_results(df, normal_df, anomaly_df, output_path)
+    visualize_gaussian_results(df, normal_df, anomaly_df, detector.threshold, output_path)
     
     print("\n" + "="*70)
     print("DETECTION COMPLETE")
     print("="*70)
+    return
 
 
 if __name__ == '__main__':

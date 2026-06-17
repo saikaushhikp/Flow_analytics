@@ -9,22 +9,41 @@ Usage:
 """
 
 import sys
-sys.path.insert(0, '/home/ubuntu/prem')
-
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import yaml
+
+# Resolve repo root
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from irsm.models.supervised import SupervisedClassifier
+
+def load_irsm_config(config_path='irsm/irsm_config.yaml'):
+    """Load IRSM configuration"""
+    config_file = Path(config_path)
+    if not config_file.is_absolute():
+        config_file = REPO_ROOT / config_file
+    with config_file.open('r') as f:
+        return yaml.safe_load(f)
 
 # =============================================================================
 # CONFIGURATION - EDIT THESE VARIABLES
 # =============================================================================
 
+config = load_irsm_config(REPO_ROOT / 'irsm' / 'irsm_config.yaml')        
+region = config['region']
+date = config['date']
+output_base = config['data']['output_base']
+output_base_path = REPO_ROOT / output_base
+
 # Path to input data
-DATA_PATH = '/home/ubuntu/prem/irsm/data/brussels/2025-06-01/lanes.csv'
+DATA_PATH = REPO_ROOT / output_base / 'data' / region / date / 'lanes.csv'
 
 # Output directory (will create: {OUTPUT_DIR}/{model_name}.csv)
-OUTPUT_DIR = '/home/ubuntu/prem/irsm/results/brussels/2025-06-01'
+OUTPUT_DIR = REPO_ROOT / output_base / 'results' / region / date
 
 # Models to run
 MODELS = ['random_forest', 'xgboost', 'neural_network']
@@ -60,9 +79,26 @@ def detect_near_misses(data_path, output_dir, models, threshold=0.5):
     df = pd.read_csv(data_path)
     print(f"  Total pairs: {len(df):,}")
     
-    # Handle NaN values (fill with median for neural network compatibility)
-    feature_cols = ['distance', 'closing_speed', 'closing_accel', 'ttc', 'mdrac', 'yaw_diff', 'yaw_rate']
-    df[feature_cols] = df[feature_cols].fillna(df[feature_cols].median())
+    # Handle NaN values dynamically using features from model
+    try:
+        temp_classifier = SupervisedClassifier.load_default(models[0])
+        feature_cols = temp_classifier.FEATURES
+    except Exception:
+        feature_cols = ['distance', 'closing_speed', 'closing_accel', 'ttc', 'mdrac', 'yaw_diff', 'yaw_rate']
+    
+    # Ensure columns exist, fill NaNs
+    severity_map = {'none': 0, 'low': 1, 'moderate': 2, 'serious': 3, 'critical': 4}
+    for col in feature_cols:
+        if col not in df.columns:
+            df[col] = 0.0
+        if col == 'decel_severity':
+            df[col] = df[col].map(severity_map).fillna(0)
+        elif col == 'decel_model':
+            df[col] = df[col].astype(float)
+        else:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+    df[feature_cols] = df[feature_cols].fillna(df[feature_cols].median()).fillna(0.0)
     
     # Create output directory
     output_dir = Path(output_dir)

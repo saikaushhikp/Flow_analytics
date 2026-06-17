@@ -125,7 +125,7 @@ def generate_risk_vectors(
                     base_pairs,
                     irsm_config["pair_generation"]["max_lateral"],
                 )
-                risk_vectors = extract_risk_vectors(same_lane_pairs, region=region, config=irsm_config)
+                risk_vectors = extract_risk_vectors(same_lane_pairs, region=region, config=irsm_config, traj_df=df_lanes)
                 if risk_vectors.empty:
                     risk_vectors = pd.DataFrame(columns=IRSM_OUTPUT_COLUMNS)
 

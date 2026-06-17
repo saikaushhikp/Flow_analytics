@@ -476,13 +476,13 @@ def plot_conflict_analysis(
     velocity_file = os.path.join(save_dir, "velocity.png")
     yaw_diff_file = os.path.join(save_dir, "yaw_diff.png")
     
-    fig1.savefig(trajectory_file, dpi=150, bbox_inches='tight')
-    fig2.savefig(distance_file, dpi=150, bbox_inches='tight')
-    fig3.savefig(closing_file, dpi=150, bbox_inches='tight')
-    fig4.savefig(velocity_file, dpi=150, bbox_inches='tight')
-    fig5.savefig(yaw_diff_file, dpi=150, bbox_inches='tight')
+    fig1.savefig(trajectory_file, dpi=500, bbox_inches='tight')
+    fig2.savefig(distance_file, dpi=500, bbox_inches='tight')
+    fig3.savefig(closing_file, dpi=500, bbox_inches='tight')
+    fig4.savefig(velocity_file, dpi=500, bbox_inches='tight')
+    fig5.savefig(yaw_diff_file, dpi=500, bbox_inches='tight')
     
-    print(f"\n✓ Saved plots to {save_dir}/")
+    print(f"\n\N{check mark} Saved plots to {save_dir}/")
     print(f"  - trajectory.png")
     print(f"  - distance.png")
     print(f"  - closing_speed.png")
@@ -579,10 +579,10 @@ def plot_all_pairs_from_csv(
     print(f"\n{'='*60}")
     print(f"Batch Plotting Summary")
     print(f"{'='*60}")
-    print(f"✓ Successful: {successful}/{len(pairs)}")
+    print(f"\N{heavy check mark} Successful: {successful}/{len(pairs)}")
     
     if failed > 0:
-        print(f" X Failed: {failed}/{len(pairs)}")
+        print(f" \N{heavy ballot x} Failed: {failed}/{len(pairs)}")
         print(f"\nFailed pairs:")
         for id1, id2, error in failed_pairs:
             print(f"  - ({id1}, {id2}): {error}")
@@ -650,8 +650,8 @@ if __name__ == "__main__":
     from utils.paths import brussels_data_dir, output_root
 
     DATA_DIR = str(brussels_data_dir())
-    START_DATE = "2025-06-14"
-    END_DATE = "2025-06-14"
+    START_DATE = "2025-06-01"
+    END_DATE =   "2025-06-01"
     
     # Load trajectory data
     print("Loading trajectory data...")

@@ -190,8 +190,35 @@ class ModifiedDRAC:
         # Lookup base PRT for follower's vehicle type
         prt_base = np.array([self.prt.get(label, 1.0) for label in follower_label])
         
-        # Detect active response (closing_accel < 0 means gap closing slower)
-        is_responding = pairs['closing_accel'].fillna(0).values < self.accel_threshold
+        # Follower's velocity magnitude
+        follower_vel = np.where(
+            pairs['is_veh1_follower'],
+            pairs['vel1'],
+            pairs['vel2']
+        )
+        
+        # Sort and group to compute follower acceleration
+        pairs_temp = pairs.copy()
+        pairs_temp['follower_vel'] = follower_vel
+        pairs_temp = pairs_temp.sort_values(['id1', 'id2', 'timestamp'])
+        
+        pair_groups = pairs_temp.groupby(['id1', 'id2'], sort=False)
+        dt = pair_groups['timestamp'].diff().dt.total_seconds().fillna(0.1)
+        d_vel = pair_groups['follower_vel'].diff().fillna(0.0)
+        
+        pairs_temp['accel_raw'] = d_vel / np.maximum(dt, 0.01)
+        
+        # Smooth with 3-frame rolling average
+        follower_accel = pairs_temp.groupby(['id1', 'id2'], sort=False)['accel_raw'].rolling(
+            window=3, center=True, min_periods=1
+        ).mean().reset_index(level=[0, 1], drop=True)
+        pairs_temp['follower_accel'] = follower_accel
+        
+        # Restore original sorting
+        pairs_temp = pairs_temp.loc[pairs.index]
+        
+        # Detect active response (either individual follower is braking OR gap is closing slower)
+        is_responding = (pairs_temp['follower_accel'].fillna(0).values < self.accel_threshold) | (pairs_temp['closing_accel'].fillna(0).values < self.accel_threshold)
         
         # Adaptive PRT: 0 if responding, normal otherwise
         prt_effective = np.where(is_responding, 0.0, prt_base)

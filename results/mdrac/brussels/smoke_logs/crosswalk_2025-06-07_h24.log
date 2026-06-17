@@ -1,0 +1,137 @@
+[SSM] Numba enabled with 15 threads
+======================================================================
+BRUSSELS CROSSWALK PEDESTRIAN-VEHICLE DETECTION
+======================================================================
+Date: 2025-06-07 00 to 2025-06-07
+Data: /home/kaushik/Kezual/Flow_analytics/data
+Output: /home/kaushik/Kezual/Flow_analytics/results/mdrac
+Smoke mode: max_hours=24
+Vehicle labels: [1, 2, 3, 4, 6, 7, 8]
+======================================================================
+
+Loading data...
+[MEMORY] Before loading: 169.4 MB
+Loading data: 100%|██████████| 24/24 [00:03<00:00,  6.94it/s]
+[DF MEMORY] Loaded data: 2820.7 MB (48,487,134 rows)
+Loaded 48,487,134 records
+
+======================================================================
+Lifetime Filtering
+======================================================================
+[lifespan filter] Removed 1,952 short-lived IDs
+  Before: 75,196 IDs (48,487,134 rows)
+  After: 73,244 IDs (48,350,584 rows)
+[DF MEMORY] After lifetime filter: 3181.6 MB (48,350,584 rows)
+
+======================================================================
+Footpath Zone Filtering
+======================================================================
+Attaching footpath zones to 48,350,584 rows...
+[MEMORY] Before footpath zones: 4438.1 MB
+Zone assignment batches: 100%|██████████| 484/484 [00:43<00:00, 11.22it/s]
+[MEMORY] After footpath zones: 7649.4 MB
+✓ Zones attached! Total rows: 48,350,584
+[footpath zone] Removed 825 objects
+[MEMORY] After footpath filter: 7377.9 MB
+
+======================================================================
+Crosswalk Zone Assignment
+======================================================================
+Attaching crosswalk zones to 47,766,240 rows...
+[MEMORY] Before crosswalk zones: 7377.9 MB
+Zone assignment batches: 100%|██████████| 478/478 [00:41<00:00, 11.58it/s]
+[MEMORY] After crosswalk zones: 7606.5 MB
+✓ Zones attached! Total rows: 47,766,240
+
+Vehicles in crosswalk zones: 1,303,099
+Label distribution in crosswalk zones:
+label
+1    759960
+4    454622
+6     49316
+2     16477
+8      8719
+7      6016
+3      4420
+5      3569
+Name: count, dtype: int64
+
+[crosswalk] Removed 8 parallel vehicles
+[crosswalk] Final vehicles in zones: 1,289,046
+
+Label distribution after parallel filter:
+label
+1    759960
+4    454197
+6     36018
+2     16477
+8      8719
+7      6016
+3      4090
+5      3569
+Name: count, dtype: int64
+[MEMORY] After crosswalk zone filtering: 4467.8 MB
+
+======================================================================
+Static Object Removal
+======================================================================
+[static filter] Found 270 static objects
+[static filter] Removed 270 static objects
+  Before: 38,618 IDs (1,289,046 rows)
+  After: 38,348 IDs (1,216,763 rows)
+[DF MEMORY] After static filter: 150.9 MB (1,216,763 rows)
+Final objects for pair generation: 1,216,763
+
+======================================================================
+CROSSWALK PAIR GENERATION
+======================================================================
+
+Generating pairs from 1,216,763 crosswalk vehicles...
+[MEMORY] Before pair generation: 4471.9 MB
+  Filtered vehicles: 1,064,402
+  Generating pairs (max_distance=8.0m)...
+  Processing 491,270 timestamps (batch_size=5,000)
+  Pair generation: 100%|██████████| 99/99 [00:01<00:00, 57.26it/s]
+  Applying overlap filter (buffer=0.5m)...
+  ✓ Generated 398,552 nearby pairs (after overlap filter)
+  ✓ Added zone information (zone1/zone2 columns)
+  ✓ Generated 398,552 nearby pairs
+
+Applying MDRAC filters with ped-vehicle label sets...
+  Label sets: Pedestrians [1] × Vehicles [4,6,7,8,3,2]
+  Skipping same-lane filter (pedestrians cross between lanes)
+  Label filter ([1] × [4, 6, 7, 8, 3, 2]): 25,483 pairs
+ Approaching pairs: 10,618
+  Skipped same-lane filter (crosswalk/crossing zone)
+  Speed diff > 0.5: 5,178
+  Final MDRAC pairs: 993
+  ✓ After MDRAC filters: 993 pairs
+
+======================================================================
+PEDESTRIAN-VEHICLE CONFLICT DETECTION
+======================================================================
+Using crosswalk-specific detection parameters (reduced avg_window)
+Input pairs: 993
+  [M-DRAC] Applied zone overrides for 'crosswalks': {'avg_window': 0.2, 'min_avg_frames': 1}
+  Skipped label filter (skip_label_filter=True): 993 pairs
+ Approaching pairs: 993
+  Zone filter (same lane): 980 pairs (filtered 13 different-lane)
+  Lateral filter (<= 1.8m): 104 pairs (filtered 876 not aligned)
+  ✓ Total filtered: 889 pairs | Remaining: 104 pairs
+  Speed diff > 0.5: 104
+  Final MDRAC pairs: 104
+
+======================================================================
+Crosswalk Ped-Vehicle Conflicts: 13
+======================================================================
+✓ Saved 13 conflicts to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/crosswalks/2025-06-07/mdrac_2025-06-07.csv
+
+✓ Saved to /home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/crosswalks/2025-06-07/mdrac_2025-06-07.csv
+
+======================================================================
+CROSSWALK ANALYSIS COMPLETE
+======================================================================
+Total Conflicts: 13
+======================================================================
+$ /home/kaushik/miniconda3/envs/flow_env/bin/python /home/kaushik/Kezual/Flow_analytics/regions/brussels/crosswalk_main.py --start-date 2025-06-07 --start-time 00 --end-date 2025-06-07 --data-dir /home/kaushik/Kezual/Flow_analytics/data --output-dir /home/kaushik/Kezual/Flow_analytics/results/mdrac --max-hours 24
+

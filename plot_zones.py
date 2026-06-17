@@ -47,7 +47,7 @@ def load_zones_by_category(region):
     return categories
 
 
-def plot_all_zones(region='oulu'):
+def plot_all_zones(region='brussels'):
     """Plot all zones with proper aspect ratio"""
     print(f"\nPlotting zones for {region.upper()}...")
     
@@ -161,7 +161,7 @@ def plot_all_zones(region='oulu'):
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / 'all_zones.png'
     
-    plt.savefig(output_path, dpi=120, bbox_inches='tight')
+    plt.savefig(output_path, dpi=1000, bbox_inches='tight')
     plt.close('all')
     
     print(f"\N{CHECK MARK} Saved to: {output_path}")
@@ -172,13 +172,14 @@ def plot_all_zones(region='oulu'):
     for category_name, zones_list in categories.items():
         print(f"  {category_name}: {len(zones_list)} zones")
     print(f"  Total: {total_zones} zones")
+    return 
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Plot all zones with proper aspect ratio')
-    parser.add_argument('--region', type=str, default='oulu',
+    parser.add_argument('--region', type=str, default='brussels',
                        choices=['oulu', 'brussels'],
-                       help='Region to plot (default: oulu)')
+                       help='Region to plot (default: brussels)')
     
     args = parser.parse_args()
     plot_all_zones(region=args.region)

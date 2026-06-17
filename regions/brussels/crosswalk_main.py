@@ -258,7 +258,7 @@ if len(df_crosswalk) > 0:
             detector = ModifiedDRAC(config, zone_type='crosswalks')
             crosswalk_conflicts = detector.detect(crosswalk_pairs, is_pairs_data=True,
                                                  skip_label_filter=True,
-                                                 skip_same_lane_filter=True)
+                                                 skip_same_lane_filter=False)
             
             print(f"\n{'='*70}")
             print(f"Crosswalk Ped-Vehicle Conflicts: {len(crosswalk_conflicts):,}")

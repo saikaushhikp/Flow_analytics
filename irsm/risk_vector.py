@@ -155,9 +155,245 @@ def _lookup_prt(labels: np.ndarray, prt_config: Dict) -> np.ndarray:
     ])
 
 
+def _train_brussels_regressors():
+    """
+    Loads brussels_june_in.csv and trains Random Forest Regressors to predict:
+    traj_severity_score, env_min_dist, env_max_overlap_prob, env_time_horizon, env_severity_score
+    """
+    from pathlib import Path
+    from sklearn.ensemble import RandomForestRegressor
+    csv_path = Path(__file__).resolve().parents[1] / 'brussels_june_in.csv'
+    if not csv_path.exists():
+        print(f"Warning: {csv_path} not found. Cannot train regressors.")
+        return None
+        
+    try:
+        df = pd.read_csv(csv_path)
+        
+        # Compute baseline calculated features
+        df['min_safe_dist_calc'] = 0.25 * (df['size_x_obj1'] + df['size_y_obj1'] + df['size_x_obj2'] + df['size_y_obj2'])
+        dx = df['pos_x_obj2'] - df['pos_x_obj1']
+        dy = df['pos_y_obj2'] - df['pos_y_obj1']
+        dvx = df['vel_x_obj2'] - df['vel_x_obj1']
+        dvy = df['vel_y_obj2'] - df['vel_y_obj1']
+        v_mag_sq = dvx**2 + dvy**2
+        cross = dx * dvy - dy * dvx
+        df['ttc_min_dist_calc'] = np.where(v_mag_sq > 0.001, np.abs(cross) / np.sqrt(v_mag_sq), np.sqrt(dx**2 + dy**2))
+        df['ttc_calc'] = df['ttc'].fillna(10.0)
+        df['ttc_severity_score_calc'] = 0.08075 * (df['ttc_min_dist_calc'] ** 1.007) / np.maximum(df['ttc_calc'], 0.1) ** 0.596
+        
+        t_min = - (dx * dvx + dy * dvy) / np.maximum(v_mag_sq, 0.001)
+        df['traj_time_horizon_calc'] = np.maximum(0.0, np.round(t_min / 0.24) * 0.24)
+        dx_t = dx + dvx * df['traj_time_horizon_calc']
+        dy_t = dy + dvy * df['traj_time_horizon_calc']
+        df['traj_min_dist_calc'] = np.sqrt(dx_t**2 + dy_t**2)
+        
+        features = [
+            'rel_dist', 'rel_vel', 'min_safe_dist_calc', 'ttc_min_dist_calc', 'ttc_calc', 'ttc_severity_score_calc',
+            'traj_time_horizon_calc', 'traj_min_dist_calc'
+        ]
+        
+        targets = ['traj_severity_score', 'env_min_dist', 'env_max_overlap_prob', 'env_time_horizon', 'env_severity_score']
+        
+        models = {}
+        for target in targets:
+            valid = df[df[target].notnull() & df['ttc'].notnull()].copy()
+            if valid.empty:
+                continue
+            X = valid[features]
+            y = valid[target]
+            
+            rf = RandomForestRegressor(n_estimators=50, random_state=42)
+            rf.fit(X, y)
+            models[target] = rf
+            
+        return models
+    except Exception as e:
+        print(f"Error training regressors: {e}")
+        return None
+
+
+def _compute_calculated_features(df):
+    """
+    Computes baseline calculated features on a pair DataFrame.
+    """
+    df = df.copy()
+    
+    # Check if necessary columns exist
+    required_cols = ['pos_x1', 'pos_y1', 'pos_x2', 'pos_y2', 'vel_x1', 'vel_y1', 'vel_x2', 'vel_y2']
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        for c in missing:
+            df[c] = 0.0
+            
+    # 1. min_safe_dist
+    size_x1 = df['size_x1'] if 'size_x1' in df.columns else np.full(len(df), 1.8)
+    size_y1 = df['size_y1'] if 'size_y1' in df.columns else np.full(len(df), 1.8)
+    size_x2 = df['size_x2'] if 'size_x2' in df.columns else np.full(len(df), 1.8)
+    size_y2 = df['size_y2'] if 'size_y2' in df.columns else np.full(len(df), 1.8)
+    df['min_safe_dist'] = 0.25 * (size_x1 + size_y1 + size_x2 + size_y2)
+    
+    # 2. ttc_min_dist
+    dx = df['pos_x2'] - df['pos_x1']
+    dy = df['pos_y2'] - df['pos_y1']
+    dvx = df['vel_x2'] - df['vel_x1']
+    dvy = df['vel_y2'] - df['vel_y1']
+    v_mag_sq = dvx**2 + dvy**2
+    cross = dx * dvy - dy * dvx
+    
+    df['ttc_min_dist'] = np.where(v_mag_sq > 0.001, np.abs(cross) / np.sqrt(v_mag_sq), np.sqrt(dx**2 + dy**2))
+    
+    # 3. ttc_severity_score
+    ttc_val = df['ttc'].fillna(10.0)
+    df['ttc_severity_score'] = 0.08075 * (df['ttc_min_dist'] ** 1.007) / np.maximum(ttc_val, 0.1) ** 0.596
+    
+    # 4. traj_time_horizon
+    t_min = - (dx * dvx + dy * dvy) / np.maximum(v_mag_sq, 0.001)
+    df['traj_time_horizon'] = np.maximum(0.0, np.round(t_min / 0.24) * 0.24)
+    
+    # 5. traj_min_dist
+    dx_t = dx + dvx * df['traj_time_horizon']
+    dy_t = dy + dvy * df['traj_time_horizon']
+    df['traj_min_dist'] = np.sqrt(dx_t**2 + dy_t**2)
+    
+    return df
+
+
+def _predict_regressor_features(df, models):
+    """
+    Predicts traj_severity_score, env_min_dist, env_max_overlap_prob, env_time_horizon, env_severity_score
+    """
+    df = df.copy()
+    
+    if models is None:
+        for target in ['traj_severity_score', 'env_min_dist', 'env_max_overlap_prob', 'env_time_horizon', 'env_severity_score']:
+            df[target] = np.nan
+        return df
+        
+    X = pd.DataFrame()
+    X['rel_dist'] = df['distance']
+    X['rel_vel'] = df['closing_speed']
+    X['min_safe_dist_calc'] = df['min_safe_dist']
+    X['ttc_min_dist_calc'] = df['ttc_min_dist']
+    X['ttc_calc'] = df['ttc'].fillna(10.0)
+    X['ttc_severity_score_calc'] = df['ttc_severity_score']
+    X['traj_time_horizon_calc'] = df['traj_time_horizon']
+    X['traj_min_dist_calc'] = df['traj_min_dist']
+    
+    X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    
+    for target, model in models.items():
+        df[target] = model.predict(X)
+        
+    return df
+
+
+def _compute_decel_metrics(row, traj_df_grouped):
+    """
+    Computes follower deceleration metrics over a 3.0s future window.
+    """
+    follower_id = row['id1'] if row['is_veh1_follower'] else row['id2']
+    t_start = pd.to_datetime(row['timestamp'])
+    t_end = t_start + pd.Timedelta(seconds=3.0)
+    
+    if follower_id not in traj_df_grouped:
+        return {
+            'decel_initial_speed': np.nan,
+            'decel_final_speed': np.nan,
+            'decel_speed_change': np.nan,
+            'decel_avg_deceleration': np.nan,
+            'decel_max_deceleration': np.nan,
+            'decel_observation_time': np.nan,
+            'decel_num_frames_observed': np.nan,
+            'decel_alignment': np.nan,
+            'decel_severity': 'none',
+            'decel_model': False
+        }
+        
+    grp = traj_df_grouped[follower_id]
+    future = grp[(grp['timestamp'] >= t_start) & (grp['timestamp'] <= t_end)]
+    
+    if len(future) < 2:
+        return {
+            'decel_initial_speed': np.nan,
+            'decel_final_speed': np.nan,
+            'decel_speed_change': np.nan,
+            'decel_avg_deceleration': np.nan,
+            'decel_max_deceleration': np.nan,
+            'decel_observation_time': np.nan,
+            'decel_num_frames_observed': np.nan,
+            'decel_alignment': np.nan,
+            'decel_severity': 'none',
+            'decel_model': False
+        }
+        
+    initial_speed = future.iloc[0]['vel']
+    final_speed = future.iloc[-1]['vel']
+    speed_change = initial_speed - final_speed
+    time_elapsed = (future.iloc[-1]['timestamp'] - future.iloc[0]['timestamp']).total_seconds()
+    num_frames = len(future)
+    avg_decel = speed_change / time_elapsed if time_elapsed > 0 else 0.0
+    
+    vels = future['vel'].values
+    times = future['timestamp'].values
+    dt = np.diff(times) / np.timedelta64(1, 's')
+    dt = np.maximum(dt, 0.01)
+    dv = -np.diff(vels)
+    inst_decels = dv / dt
+    inst_decels_pos = inst_decels[inst_decels > 0]
+    
+    if len(inst_decels_pos) > 0:
+        max_decel = np.max(inst_decels_pos)
+    else:
+        max_decel = 0.0
+        
+    dx = row['pos_x2'] - row['pos_x1']
+    dy = row['pos_y2'] - row['pos_y1']
+    distance = row['distance']
+    
+    if distance > 0.001:
+        if row['is_veh1_follower']:
+            to_leader_x = dx / distance
+            to_leader_y = dy / distance
+            yaw_follower = row['yaw1']
+        else:
+            to_leader_x = -dx / distance
+            to_leader_y = -dy / distance
+            yaw_follower = row['yaw2']
+            
+        alignment = np.cos(yaw_follower) * to_leader_x + np.sin(yaw_follower) * to_leader_y
+    else:
+        alignment = np.nan
+        
+    if max_decel <= 0.05:
+        severity = 'none'
+    elif max_decel >= 6.5:
+        severity = 'critical'
+    elif max_decel >= 4.0:
+        severity = 'serious'
+    elif max_decel >= 2.0:
+        severity = 'moderate'
+    else:
+        severity = 'low'
+        
+    return {
+        'decel_initial_speed': initial_speed,
+        'decel_final_speed': final_speed,
+        'decel_speed_change': speed_change,
+        'decel_avg_deceleration': avg_decel,
+        'decel_max_deceleration': max_decel,
+        'decel_observation_time': time_elapsed,
+        'decel_num_frames_observed': num_frames,
+        'decel_alignment': alignment,
+        'decel_severity': severity,
+        'decel_model': True
+    }
+
+
 def extract_risk_vectors(pairs: pd.DataFrame, 
                         region: str = "",
-                        config: Dict = None) -> pd.DataFrame:
+                        config: Dict = None,
+                        traj_df: pd.DataFrame = None) -> pd.DataFrame:
     """
     Extract risk vectors from pair data using config-based thresholds.
     Uses existing SSM functions - NO hardcoded values.
@@ -167,12 +403,15 @@ def extract_risk_vectors(pairs: pd.DataFrame,
         2. Filter by config thresholds (TTC, closing_speed)
         3. Compute MDRAC using existing ModifiedDRAC class
         4. Aggregate to average
-        5. Select final features
+        5. Extract rich features using analytical formulas and regressors
+        6. Compute follower deceleration metrics from original trajectory data
+        7. Select final features
         
     Args:
         pairs: DataFrame with pair observations
         region: Region name for link generation
         config: IRSM configuration dict (from irsm_config.yaml)
+        traj_df: Optional original trajectory DataFrame to compute deceleration metrics
         
     Returns:
         DataFrame with averaged risk features per pair
@@ -277,7 +516,44 @@ def extract_risk_vectors(pairs: pd.DataFrame,
         return pd.DataFrame()
     
     # ========================================================================
-    # STEP 4: Select final features
+    # STEP 4: Calculate advanced features (analytical and regressor-based)
+    # ========================================================================
+    print("  Calculating advanced features...")
+    aggregated = _compute_calculated_features(aggregated)
+    models = _train_brussels_regressors()
+    aggregated = _predict_regressor_features(aggregated, models)
+    
+    # ========================================================================
+    # STEP 5: Compute follower deceleration metrics from original trajectory data
+    # ========================================================================
+    if traj_df is not None and len(aggregated) > 0:
+        print("  Computing follower deceleration metrics...")
+        follower_ids = set(np.where(aggregated['is_veh1_follower'], aggregated['id1'], aggregated['id2']))
+        follower_df = traj_df[traj_df['id'].isin(follower_ids)].sort_values(['id', 'timestamp'])
+        traj_df_grouped = {fid: grp for fid, grp in follower_df.groupby('id')}
+        
+        decel_list = []
+        for _, row in aggregated.iterrows():
+            decel_list.append(_compute_decel_metrics(row, traj_df_grouped))
+            
+        decel_df = pd.DataFrame(decel_list)
+        for col in decel_df.columns:
+            aggregated[col] = decel_df[col].values
+    else:
+        print("  No trajectory data provided; filling deceleration metrics with NaN.")
+        aggregated['decel_initial_speed'] = np.nan
+        aggregated['decel_final_speed'] = np.nan
+        aggregated['decel_speed_change'] = np.nan
+        aggregated['decel_avg_deceleration'] = np.nan
+        aggregated['decel_max_deceleration'] = np.nan
+        aggregated['decel_observation_time'] = np.nan
+        aggregated['decel_num_frames_observed'] = np.nan
+        aggregated['decel_alignment'] = np.nan
+        aggregated['decel_severity'] = 'none'
+        aggregated['decel_model'] = False
+        
+    # ========================================================================
+    # STEP 6: Select final features
     # ========================================================================
     metadata_cols = ['pair_id', 'timestamp', 'label1', 'label2']
     
@@ -297,24 +573,11 @@ def extract_risk_vectors(pairs: pd.DataFrame,
     else:
         aggregated['same_zone'] = 0
     
-    # Risk features (at peak avg MDRAC timestamp)
-    # NOTE: ONLY mdrac is averaged, others are point values at this timestamp!
-    # yaw_diff_rate was computed by filter_approaching
-    risk_features = [
-        'mdrac',                    # Averaged MDRAC (rolling window)
-        'distance',                 # Point value at peak timestamp
-        'closing_speed',            # Point value at peak timestamp
-        'closing_accel',            # Point value at peak timestamp
-        'speed_diff',               # Follower speed minus leader speed
-        'ttc',                      # Point value at peak timestamp
-        'yaw_diff',                 # Point value at peak timestamp
-        'yaw_diff_rate'             # Point value at peak timestamp
-    ]
-    
     # Rename yaw_diff_rate to yaw_rate for consistency with user spec
     if 'yaw_diff_rate' in aggregated.columns:
         aggregated = aggregated.rename(columns={'yaw_diff_rate': 'yaw_rate'})
-        risk_features = ['yaw_rate' if f == 'yaw_diff_rate' else f for f in risk_features]
+        
+    risk_features = get_feature_names()
     
     # Final column selection
     final_cols = metadata_cols + ['link', 'same_zone'] + risk_features
@@ -325,7 +588,7 @@ def extract_risk_vectors(pairs: pd.DataFrame,
     
     print(f"  \N{CHECK MARK} Extracted risk vectors: {len(result):,} rows × {len(available_cols)} features")
     print(f"  Features: {', '.join([f for f in risk_features if f in result.columns])}")
-    print(f"  NOTE: Only MDRAC is averaged; others are point values at peak timestamp")
+    print(f"  NOTE: Only MDRAC is averaged; others are point/window values at peak timestamp")
     
     return result
 
@@ -345,5 +608,26 @@ def get_feature_names() -> List[str]:
         'speed_diff',
         'ttc',
         'yaw_diff',
-        'yaw_rate'
+        'yaw_rate',
+        'min_safe_dist',
+        'ttc_min_dist',
+        'ttc_severity_score',
+        'traj_min_dist',
+        'traj_time_horizon',
+        'traj_severity_score',
+        'env_min_dist',
+        'env_max_overlap_prob',
+        'env_time_horizon',
+        'env_severity_score',
+        'decel_initial_speed',
+        'decel_final_speed',
+        'decel_speed_change',
+        'decel_avg_deceleration',
+        'decel_max_deceleration',
+        'decel_observation_time',
+        'decel_num_frames_observed',
+        'decel_alignment',
+        'decel_severity',
+        'decel_model'
     ]
+

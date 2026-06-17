@@ -61,6 +61,25 @@ model:
     - ttc
     - yaw_diff
     - yaw_rate
+    - min_safe_dist
+    - ttc_min_dist
+    - ttc_severity_score
+    - traj_min_dist
+    - traj_time_horizon
+    - traj_severity_score
+    - env_min_dist
+    - env_max_overlap_prob
+    - env_time_horizon
+    - env_severity_score
+    - decel_initial_speed
+    - decel_final_speed
+    - decel_speed_change
+    - decel_avg_deceleration
+    - decel_max_deceleration
+    - decel_observation_time
+    - decel_num_frames_observed
+    - decel_alignment
+    - decel_model
   
 # Output
 output:
