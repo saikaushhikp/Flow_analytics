@@ -1,5 +1,5 @@
 """
-IRSM - Intelligent Risk Scoring Mechanism
+IRSM - Interaction Risk Space Modelling
 
 Unsupervised near-miss classification using anomaly detection.
 """

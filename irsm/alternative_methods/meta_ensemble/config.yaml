@@ -1,0 +1,13 @@
+hyperparameters:
+  meta_model: "logistic_regression"
+  solver: "lbfgs"
+  C: 1.0
+  random_state: 42
+  
+weights:
+  ensemble_ratio:
+    mdrac_composite: 0.2
+    iforest: 0.2
+    gaussian: 0.2
+    random_forest: 0.2
+    xgboost: 0.2

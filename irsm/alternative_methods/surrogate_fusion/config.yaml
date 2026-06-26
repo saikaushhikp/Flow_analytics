@@ -1,0 +1,7 @@
+rules:
+  baseline:
+    min_mdrac: 3.0
+  filtered:
+    min_mdrac: 3.0
+    max_deceleration_g_equivalent: -0.8
+    max_ttc: 1.5

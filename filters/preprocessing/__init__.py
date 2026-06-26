@@ -1,5 +1,5 @@
 """
-Preprocessing filters package for PREM.
+Preprocessing filters package for Road Event Monitoring.
 
 Contains filters that clean and prepare raw trajectory data:
 - lifetime_filter: Removes short-lived detections

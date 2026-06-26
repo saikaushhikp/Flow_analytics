@@ -573,7 +573,7 @@ def plot_all_pairs_from_csv(
         except Exception as e:
             failed += 1
             failed_pairs.append((id1, id2, str(e)))
-            print(f"\n\N{heavy ballot x} Failed for pair ({id1}, {id2}): {e}\n")
+            print(f"\n\N{CROSS MARK} Failed for pair ({id1}, {id2}): {e}\n")
     
     # Summary
     print(f"\n{'='*60}")
@@ -582,7 +582,7 @@ def plot_all_pairs_from_csv(
     print(f"\N{heavy check mark} Successful: {successful}/{len(pairs)}")
     
     if failed > 0:
-        print(f" \N{heavy ballot x} Failed: {failed}/{len(pairs)}")
+        print(f" \N{CROSS MARK} Failed: {failed}/{len(pairs)}")
         print(f"\nFailed pairs:")
         for id1, id2, error in failed_pairs:
             print(f"  - ({id1}, {id2}): {error}")

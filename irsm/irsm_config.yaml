@@ -49,7 +49,7 @@ aggregation:
 
 # Model Configuration
 model:
-  contamination: 0.0025  # 0.25% of pairs flagged as anomalies
+  contamination: 0.001  # 0.1% of pairs flagged as anomalies
   n_estimators: 150
   random_state: 2026
   feature_cols:
@@ -84,3 +84,56 @@ model:
 # Output
 output:
   save_per_zone: false   # Single lanes.csv file (not per-zone)
+
+# Evaluator and prediction settings
+evaluation:
+  start_date: '2025-06-01'
+  end_date: '2025-06-07'
+  gold_path: 'brussels_june_in.csv'
+  canonical_dir: 'irsm/results/brussels'
+
+# Optimized M-DRAC thresholds & parameters
+thresholds:
+  lanes:
+    min_mdrac: 3.4
+    max_ttc: 1.0
+    min_speed_diff: 0.5
+    max_lateral_distance: 1.2
+    closing_accel_threshold: -0.3
+    min_avg_frames: 3
+    min_duration: 0.2
+  crosswalks:
+    min_mdrac: 3.4
+    max_ttc: 0.8
+    min_speed_diff: 0.5
+    yaw_diff_rate_threshold: 10.0
+    avg_window: 0.3
+    min_avg_frames: 1
+    min_duration: 0.1
+
+# Feature families for training unsupervised and supervised models
+feature_sets:
+  safety_core:
+    - mdrac
+    - ttc
+    - closing_speed
+    - closing_accel
+    - speed_diff
+    - yaw_diff
+    - yaw_rate
+    - ttc_severity_score
+    - traj_severity_score
+    - env_severity_score
+    - decel_avg_deceleration
+    - decel_max_deceleration
+
+# Unsupervised Ensemble Settings
+ensemble:
+  weights:
+    iforest: 0.4
+    gaussian: 0.4
+    kinetic_bonus: 0.2
+
+# Calibration Settings for supervised classifiers
+calibration:
+  method: 'sigmoid'

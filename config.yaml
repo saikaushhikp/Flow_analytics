@@ -119,15 +119,26 @@ mdrac:
   # Zone-specific overrides
   zone_overrides:
     crosswalks:
-      avg_window: 0.2         # reduced from 1.0s for faster ped-vehicle interactions
-      min_avg_frames: 1       # reduced from 3 frames
+      min_mdrac: 3.4
+      max_ttc: 0.8
+      min_speed_diff: 0.5
+      yaw_diff_rate_threshold: 10.0
+      avg_window: 0.3
+      min_avg_frames: 1
+      min_duration: 0.1
     lanes:
-      # Use default values 
+      min_mdrac: 3.4
+      max_ttc: 1.0
+      min_speed_diff: 0.5
+      max_lateral_distance: 1.2
+      closing_accel_threshold: -0.3
       avg_window: 1.0
       min_avg_frames: 3
+      min_duration: 0.2
     crossing:
       avg_window: 0.2
       min_avg_frames: 2
+      min_duration: 0.1
   
   # Dual-metric detection (for non-longitudinal conflicts)
   yaw_diff_rate_threshold: 15.0      # deg/s - yaw rate threshold

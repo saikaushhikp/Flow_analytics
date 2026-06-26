@@ -33,10 +33,6 @@ LABEL_TO_PRT_KEY = {
     8: 'bus',
 }
 
-
-
-
-
 def aggregate_to_peak_avg_mdrac(
     pairs: pd.DataFrame,
     min_avg_frames: int = 3,
@@ -580,7 +576,7 @@ def extract_risk_vectors(pairs: pd.DataFrame,
     risk_features = get_feature_names()
     
     # Final column selection
-    final_cols = metadata_cols + ['link', 'same_zone'] + risk_features
+    final_cols = metadata_cols + ['same_zone'] + risk_features + ['link']
     
     # Keep only available columns
     available_cols = [c for c in final_cols if c in aggregated.columns]

@@ -1,5 +1,5 @@
 """
-Filters package for PREM.
+Filters package for Road Event Monitoring.
 
 Organized into:
 - preprocessing/: Data cleaning filters (lifetime, zones, static, ghost, overlap)

@@ -11,7 +11,7 @@
 ---
 
 ## 1. Executive Summary
-Following the take-over of the Proactive Road Event Monitoring (PREM) codebase, we inherited a half-refactored, non-runnable repository. While the underlying algorithm (M-DRAC) and the experimental structures (Safety Potential Fields, unsupervised IRSM, VLM Validation) were conceptually sound, the repository was broken due to hardcoded machine paths, missing modules, and runtime bugs.
+Following the take-over of the Road Event Monitoring codebase, we inherited a half-refactored, non-runnable repository. While the underlying algorithm (M-DRAC) and the experimental structures (Safety Potential Fields, unsupervised IRSM, VLM Validation) were conceptually sound, the repository was broken due to hardcoded machine paths, missing modules, and runtime bugs.
 
 Over a series of development runs, we stabilized the codebase, resolved import and configuration blockers, completed end-to-end integration of the local 4.3 GB trajectory dataset, and created a fully reproducible, verified, and bounded hourly smoke-testing pipeline for both M-DRAC and IRSM.
 

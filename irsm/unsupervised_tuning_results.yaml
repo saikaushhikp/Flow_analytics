@@ -1,0 +1,10 @@
+best_gaussian:
+  contamination: 0.001
+  feature_set: full_28
+best_iforest:
+  contamination: 0.001
+  feature_set: full_28
+  n_estimators: 150
+ensemble_p10: 0.0
+gaussian_p10: 0.0
+iforest_p10: 0.0

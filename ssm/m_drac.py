@@ -69,12 +69,19 @@ class ModifiedDRAC:
         
         # Apply zone-specific overrides if specified
         mdrac_config = config['mdrac'].copy()
+        self.config = config.copy()
+        self.config['filters'] = config['filters'].copy()
+        
         if zone_type and 'zone_overrides' in config['mdrac']:
             if zone_type in config['mdrac']['zone_overrides']:
                 # Apply zone-specific overrides
                 overrides = config['mdrac']['zone_overrides'][zone_type]
                 mdrac_config.update(overrides)
                 print(f"  [M-DRAC] Applied zone overrides for '{zone_type}': {overrides}")
+                # Sync overrides to filters so get_mdrac_pairs uses them
+                for key in ['max_ttc', 'max_lateral_distance', 'min_speed_diff']:
+                    if key in overrides:
+                        self.config['filters'][key] = overrides[key]
         
         # Load parameters (with zone overrides applied if present)
         self.prt = mdrac_config['prt']                       # Perception-Reaction Time by vehicle type
@@ -84,8 +91,7 @@ class ModifiedDRAC:
         # Adaptive detection parameters
         self.accel_threshold = mdrac_config.get('closing_accel_threshold', -0.5)
         self.min_time_buffer = mdrac_config.get('min_time_buffer', 0.2)
-        
-        # Temporal averaging parameters (zone-specific if overridden)
+            # Temporal averaging parameters (zone-specific if overridden)
         self.avg_window = mdrac_config.get('avg_window', 1.0)
         self.min_avg_frames = mdrac_config.get('min_avg_frames', 3)
         self.max_frame_gap = mdrac_config.get('max_frame_gap', max(0.5, self.avg_window * 2))
@@ -93,6 +99,10 @@ class ModifiedDRAC:
         # Yaw-based detection parameters (non-longitudinal conflicts)
         self.yaw_diff_rate_threshold = mdrac_config.get('yaw_diff_rate_threshold', 15.0)
         self.longitudinal_yaw_threshold = mdrac_config.get('longitudinal_yaw_threshold', 30.0)
+        
+        # Quality gates parameters
+        self.min_duration = mdrac_config.get('min_duration', 0.2 if zone_type == 'lanes' else 0.1)
+        self.dedupe_window_sec = mdrac_config.get('dedupe_window_sec', 10.0)
     
     def detect(self, data: pd.DataFrame, is_pairs_data: bool = False,
                skip_label_filter: bool = False,
@@ -154,6 +164,12 @@ class ModifiedDRAC:
         
         # Step 4: Temporal averaging (1-second windows)
         pairs = self.calculate_avg_mdrac(pairs)
+        
+        if len(pairs) == 0:
+            return self._empty_output()
+            
+        # Step 4.5: Apply quality gates (persistence, composite score, deduplication)
+        pairs = self.apply_quality_gates(pairs)
         
         if len(pairs) == 0:
             return self._empty_output()
@@ -391,13 +407,59 @@ class ModifiedDRAC:
         pairs['severity'] = severity
         
         return pairs
+
+    def apply_quality_gates(self, conflicts: pd.DataFrame) -> pd.DataFrame:
+        """Apply temporal persistence, composite scoring, and pair deduplication."""
+        if conflicts.empty:
+            return conflicts
+            
+        # 1. Temporal persistence gate
+        conflicts = conflicts[
+            (conflicts['num_frames'] >= self.min_avg_frames) & 
+            (conflicts['duration'] >= self.min_duration)
+        ].copy()
+        
+        if conflicts.empty:
+            return conflicts
+            
+        # 2. Composite severity score: avg_mdrac * (1 / (ttc + 0.1)) * (closing_speed + 1) * (duration + 1)
+        conflicts['composite_score'] = (
+            conflicts['mdrac'] * 
+            (1.0 / (conflicts['ttc'] + 0.1)) * 
+            (conflicts['closing_speed'] + 1.0) * 
+            (conflicts['duration'] + 1.0)
+        )
+        
+        # Construct pair_id if missing
+        if 'pair_id' not in conflicts.columns and 'id1' in conflicts.columns and 'id2' in conflicts.columns:
+            conflicts['pair_id'] = conflicts.apply(
+                lambda r: f"{min(int(r['id1']), int(r['id2']))}_{max(int(r['id1']), int(r['id2']))}",
+                axis=1
+            )
+            
+        # Sort by timestamp
+        conflicts = conflicts.sort_values(by=['pair_id', 'timestamp']).reset_index(drop=True)
+        
+        # 3. Pair-level dedupe: keep strongest event per pair in temporal clusters
+        deduped = []
+        for pair_id, group in conflicts.groupby('pair_id'):
+            group = group.sort_values(by='timestamp')
+            time_diffs = group['timestamp'].diff().dt.total_seconds().fillna(self.dedupe_window_sec + 1.0)
+            group['cluster'] = (time_diffs > self.dedupe_window_sec).cumsum()
+            
+            # Keep strongest per cluster
+            for _, cluster_grp in group.groupby('cluster'):
+                strongest = cluster_grp.loc[cluster_grp['composite_score'].idxmax()]
+                deduped.append(strongest.to_dict())
+                
+        return pd.DataFrame(deduped)
     
     def format_output(self, pairs: pd.DataFrame) -> pd.DataFrame:
         """
         Format final output with clean schema including zone information.
         
         Schema: timestamp, id1, id2, zone, [label1]_v_[label2], leader, dist, TTC, MDRAC, 
-                closing_speed, speed_diff, yaw_diff, link
+                closing_speed, speed_diff, yaw_diff, link, composite_score, duration, num_frames
         
         Args:
             pairs: DataFrame with all calculated values
@@ -445,6 +507,9 @@ class ModifiedDRAC:
             'closing_speed': pairs['closing_speed'].values,
             'speed_diff': pairs['speed_diff'].values,
             'yaw_diff': yaw_diff,
+            'composite_score': pairs['composite_score'].values,
+            'duration': pairs['duration'].values,
+            'num_frames': pairs['num_frames'].values,
             'link': links.values
         })
         
@@ -454,7 +519,7 @@ class ModifiedDRAC:
         """Return empty DataFrame with correct schema."""
         return pd.DataFrame(columns=[
             'timestamp', 'id1', 'id2', 'zone', 'interaction', 'leader', 'dist', 'TTC', 
-            'MDRAC', 'closing_speed', 'speed_diff', 'yaw_diff', 'link'
+            'MDRAC', 'closing_speed', 'speed_diff', 'yaw_diff', 'composite_score', 'duration', 'num_frames', 'link'
         ])
 
 

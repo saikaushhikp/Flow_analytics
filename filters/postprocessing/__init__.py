@@ -1,5 +1,5 @@
 """
-Postprocessing filters package for PREM.
+Postprocessing filters package for Road Event Monitoring.
 
 Contains filters applied after SSM detection:
 - teleportation_filter: Removes unrealistic position jumps (moved here)

@@ -4,7 +4,6 @@ Zone Visualization Tool - Proper map-like view
 Plots all zones with correct aspect ratio and proportions.
 
 Usage:
-    python plot_zones.py --region oulu
     python plot_zones.py --region brussels
 """
 
@@ -161,7 +160,7 @@ def plot_all_zones(region='brussels'):
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / 'all_zones.png'
     
-    plt.savefig(output_path, dpi=1000, bbox_inches='tight')
+    plt.savefig(output_path, dpi=1200, bbox_inches='tight')
     plt.close('all')
     
     print(f"\N{CHECK MARK} Saved to: {output_path}")

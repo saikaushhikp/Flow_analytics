@@ -124,7 +124,7 @@ log_memory("Before footpath zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After footpath zones")
-print(f"✓ Zones attached! Total rows: {len(df):,}")
+print(f"\n\N{CHECK MARK} Zones attached! Total rows: {len(df):,}")
 
 df = apply_footpath_zone_filter(df)
 df = df.drop(columns=['zone'], errors='ignore')
@@ -148,7 +148,7 @@ log_memory("Before crosswalk zones")
 df = attach_zones_to_objects(df, gdf_zones, how="left", batch_size=100000)
 
 log_memory("After crosswalk zones")
-print(f"✓ Zones attached! Total rows: {len(df):,}")
+print(f"\n\N{CHECK MARK} Zones attached! Total rows: {len(df):,}")
 
 # Filter parallel vehicles
 removed_ids_global = []
@@ -206,17 +206,17 @@ log_memory("Before pair generation")
 # OLD code signature: find_all_nearby_pairs(df, config)
 base_pairs = find_all_nearby_pairs(df_lanes, config)
 
-print(f"✓ Generated {len(base_pairs):,} base pairs")
+print(f"\n\N{CHECK MARK} Generated {len(base_pairs):,} base pairs")
 log_memory("After pair generation")
 
 # Filter pairs for M-DRAC 
 print("\nFiltering pairs for M-DRAC...")
 mdrac_pairs = get_mdrac_pairs(base_pairs, config, skip_pair_generation=True)
-print(f"✓ M-DRAC pairs after filtering: {len(mdrac_pairs):,}")
+print(f"\n\N{CHECK MARK} M-DRAC pairs after filtering: {len(mdrac_pairs):,}")
 
 # Detect conflicts from filtered pairs
 print("\nDetecting M-DRAC conflicts...")
-mdrac_detector = ModifiedDRAC(config)
+mdrac_detector = ModifiedDRAC(config, zone_type='lanes')
 mdrac_conflicts = mdrac_detector.detect(mdrac_pairs, is_pairs_data=True)
 
 print(f"\n{'='*70}")
@@ -228,6 +228,22 @@ print(f"{'='*70}")
 # Save M-DRAC results
 mdrac_path = save_detection_results(mdrac_conflicts, OUTPUT_DIR, 'mdrac', 'brussels', START_DATE, zone_name='lanes')
 print(f"Saved to {mdrac_path}")
+
+# Save canonical predictions
+if not mdrac_conflicts.empty:
+    mdrac_conflicts['binary_prediction'] = 1
+from irsm.canonical_utils import save_canonical_predictions
+canonical_path = save_canonical_predictions(
+    df=mdrac_conflicts,
+    region='brussels',
+    date=START_DATE,
+    source_family='mdrac',
+    score_col='composite_score' if 'composite_score' in mdrac_conflicts.columns else 'MDRAC',
+    binary_pred_col='binary_prediction',
+    zone='lanes',
+    threshold_version='tuned_v1'
+)
+print(f" \N{CHECK MARK} Saved canonical predictions to {canonical_path}")
 
 # Cell 13
 print("\n" + "="*70)

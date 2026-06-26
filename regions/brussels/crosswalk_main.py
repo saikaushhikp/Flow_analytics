@@ -258,7 +258,7 @@ if len(df_crosswalk) > 0:
             detector = ModifiedDRAC(config, zone_type='crosswalks')
             crosswalk_conflicts = detector.detect(crosswalk_pairs, is_pairs_data=True,
                                                  skip_label_filter=True,
-                                                 skip_same_lane_filter=False)
+                                                 skip_same_lane_filter=True)
             
             print(f"\n{'='*70}")
             print(f"Crosswalk Ped-Vehicle Conflicts: {len(crosswalk_conflicts):,}")
@@ -290,6 +290,22 @@ crosswalk_path = save_detection_results(
     zone_name='crosswalks'
 )
 print(f"\n\N{CHECK MARK} Saved to {crosswalk_path}")
+
+# Save canonical predictions
+if not crosswalk_conflicts.empty:
+    crosswalk_conflicts['binary_prediction'] = 1
+from irsm.canonical_utils import save_canonical_predictions
+canonical_path = save_canonical_predictions(
+    df=crosswalk_conflicts,
+    region='brussels',
+    date=START_DATE,
+    source_family='mdrac',
+    score_col='composite_score' if 'composite_score' in crosswalk_conflicts.columns else 'MDRAC',
+    binary_pred_col='binary_prediction',
+    zone='crosswalks',
+    threshold_version='tuned_v1'
+)
+print(f"Saved canonical predictions to {canonical_path}")
 
 print("\n" + "="*70)
 print("CROSSWALK ANALYSIS COMPLETE")

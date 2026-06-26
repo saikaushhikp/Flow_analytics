@@ -66,7 +66,7 @@ def run_isolation_forest():
     output_dir.mkdir(parents=True, exist_ok=True)
     
     if not data_file.exists():
-        print(f"\n\N{heavy ballot x} Data file not found: {data_file}")
+        print(f"\n\N{CROSS MARK} Data file not found: {data_file}")
         return
     
     # Load lane pairs data
@@ -142,7 +142,7 @@ def run_isolation_forest():
         print(f"Output: {detection_path}")
         print("="*70)
     else:
-        print("\n\N{heavy ballot x} No detections found!")
+        print("\n\N{CROSS MARK} No detections found!")
 
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 """
-Utils package for PREM (Proactive Road Event Monitoring)
+Utils package for Road Event Monitoring.
 
 Provides helper utilities for:
 - Memory monitoring

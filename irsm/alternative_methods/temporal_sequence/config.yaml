@@ -1,0 +1,21 @@
+window_size_seconds: 3.0
+step_size_hz: 10.0
+
+hyperparameters:
+  classifier: "random_forest"
+  n_estimators: 100
+  max_depth: 5
+  random_state: 42
+  
+features:
+  - dist_min
+  - dist_mean
+  - dist_std
+  - closing_speed_max
+  - closing_speed_mean
+  - closing_speed_std
+  - decel_min
+  - decel_mean
+  - decel_num_frames_braking
+  - yaw_diff_mean
+  - yaw_diff_max
