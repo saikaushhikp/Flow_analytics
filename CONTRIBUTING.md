@@ -1,7 +1,7 @@
 # Contributing Guide
 
 > [!NOTE]  
-> This guide summarizes the work completed up to Last commit [`0020b59ad0143c93f9e039b27f4d64b88acafefe`](https://github.com/saikaushhikp/Flow_analytics/tree/0020b59ad0143c93f9e039b27f4d64b88acafefe)  
+> This guide summarizes the work completed up to Last commit [`05855ddd8f29a805b78d07301f733c41fdae0f51`](https://github.com/saikaushhikp/Flow_analytics/tree/05855ddd8f29a805b78d07301f733c41fdae0f51)  
 > and also explains how to execute the main commands in this repository.
 
 > [!TIP]
