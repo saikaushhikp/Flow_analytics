@@ -371,11 +371,183 @@ def plot_yaw_diff_over_time(
     return ax
 
 
+LABEL_MAP = {
+    1: 'pedestrian',
+    2: 'bicycle',
+    3: 'motorcycle',
+    4: 'car',
+    5: 'escooter',
+    6: 'van',
+    7: 'truck',
+    8: 'bus'
+}
+
+def save_animation_gif(df: pd.DataFrame, id1: int, id2: int, output_path: str, dpi: int = 500, event_timestamp: Optional[str] = None) -> None:
+    import matplotlib.animation as manimation
+    
+    # Extract trajectories
+    traj1 = df[df['id'] == id1].sort_values('timestamp').copy()
+    traj2 = df[df['id'] == id2].sort_values('timestamp').copy()
+    
+    if len(traj1) == 0 or len(traj2) == 0:
+        return
+        
+    traj1['timestamp'] = pd.to_datetime(traj1['timestamp'])
+    traj2['timestamp'] = pd.to_datetime(traj2['timestamp'])
+    
+    # Merge to align frames
+    merged_all = pd.merge(
+        traj1[['timestamp', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel', 'yaw', 'label']].rename(
+            columns={'pos_x': 'x1', 'pos_y': 'y1', 'vel_x': 'vx1', 'vel_y': 'vy1', 'vel': 'v1', 'yaw': 'yaw1', 'label': 'lbl1'}
+        ),
+        traj2[['timestamp', 'pos_x', 'pos_y', 'vel_x', 'vel_y', 'vel', 'yaw', 'label']].rename(
+            columns={'pos_x': 'x2', 'pos_y': 'y2', 'vel_x': 'vx2', 'vel_y': 'vy2', 'vel': 'v2', 'yaw': 'yaw2', 'label': 'lbl2'}
+        ),
+        on='timestamp',
+        how='inner'
+    )
+    
+    if merged_all.empty:
+        return
+        
+    # Get labels
+    label1 = merged_all['lbl1'].iloc[0] if 'lbl1' in merged_all.columns else 4
+    label2 = merged_all['lbl2'].iloc[0] if 'lbl2' in merged_all.columns else 4
+    
+    # Calculate distance and other metrics on full merged dataframe
+    dx = merged_all['x2'] - merged_all['x1']
+    dy = merged_all['y2'] - merged_all['y1']
+    merged_all['distance'] = np.sqrt(dx**2 + dy**2)
+    
+    dvx = merged_all['vx2'] - merged_all['vx1']
+    dvy = merged_all['vy2'] - merged_all['vy1']
+    dot_product = dvx * dx + dvy * dy
+    merged_all['closing_speed'] = np.where(
+        merged_all['distance'] > 0.01,
+        -dot_product / merged_all['distance'],
+        0.0
+    )
+    merged_all['ttc'] = np.where(
+        merged_all['closing_speed'] > 0.01,
+        merged_all['distance'] / merged_all['closing_speed'],
+        np.inf
+    )
+    
+    # Identify event center t
+    if event_timestamp is not None:
+        T_near_miss = pd.to_datetime(event_timestamp)
+    else:
+        min_idx = merged_all['distance'].idxmin()
+        T_near_miss = merged_all.loc[min_idx, 'timestamp']
+    
+    # Window of exactly t-7 to t+7 seconds (14 seconds window)
+    start_time = T_near_miss - pd.Timedelta(seconds=7.0)
+    end_time = T_near_miss + pd.Timedelta(seconds=7.0)
+    
+    # Slice
+    merged = merged_all[(merged_all['timestamp'] >= start_time) & (merged_all['timestamp'] <= end_time)].copy()
+    if merged.empty:
+        merged = merged_all.copy() # fallback
+        
+    # Plotting setup
+    fig, ax = plt.subplots(figsize=(10, 8), dpi=dpi)
+    
+    x_min = min(merged['x1'].min(), merged['x2'].min())
+    x_max = max(merged['x1'].max(), merged['x2'].max())
+    y_min = min(merged['y1'].min(), merged['y2'].min())
+    y_max = max(merged['y1'].max(), merged['y2'].max())
+    
+    x_pad = (x_max - x_min) * 0.1 if x_max != x_min else 5
+    y_pad = (y_max - y_min) * 0.1 if y_max != y_min else 5
+    ax.set_xlim(x_min - x_pad, x_max + x_pad)
+    ax.set_ylim(y_min - y_pad, y_max + y_pad)
+    ax.set_xlabel("X Position (m)", fontweight='bold')
+    ax.set_ylabel("Y Position (m)", fontweight='bold')
+    ax.set_title(f"2D Trajectory Animation: {id1} vs {id2}", fontweight='bold')
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.5)
+    ax.set_facecolor('#F8F9FA')
+    
+    # Background full paths
+    ax.plot(merged['x1'], merged['y1'], color='#E74C3C', lw=1.5, alpha=0.25, linestyle=':')
+    ax.plot(merged['x2'], merged['y2'], color='#3498DB', lw=1.5, alpha=0.25, linestyle=':')
+    
+    # Plot objects
+    line1, = ax.plot([], [], color='#E74C3C', lw=3, alpha=0.8)
+    line2, = ax.plot([], [], color='#3498DB', lw=3, alpha=0.8)
+    scatter1, = ax.plot([], [], 'o', markersize=10, color='#E74C3C', markeredgecolor='white', markeredgewidth=1.5)
+    scatter2, = ax.plot([], [], 'o', markersize=10, color='#3498DB', markeredgecolor='white', markeredgewidth=1.5)
+    conn_line, = ax.plot([], [], color='#F39C12', linestyle='--', lw=2, alpha=0.7)
+    
+    lbl_str1 = LABEL_MAP.get(int(label1), 'unknown')
+    lbl_str2 = LABEL_MAP.get(int(label2), 'unknown')
+    
+    legend_lines = [
+        plt.Line2D([0], [0], color='#E74C3C', lw=3, label=f'ID {id1} ({lbl_str1})'),
+        plt.Line2D([0], [0], color='#3498DB', lw=3, label=f'ID {id2} ({lbl_str2})')
+    ]
+    ax.legend(handles=legend_lines, loc='upper right', fontsize=10)
+    
+    info_text = ax.text(
+        0.02, 0.98, "", transform=ax.transAxes, verticalalignment='top',
+        fontsize=10, bbox=dict(boxstyle='round', facecolor='white', edgecolor='gray', alpha=0.85)
+    )
+    
+    dist_annotation = ax.text(
+        0, 0, "", fontsize=9, fontweight='bold', color='#F39C12',
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='#F39C12', alpha=0.9),
+        ha='center', va='center'
+    )
+    
+    def animate(frame_idx):
+        if frame_idx >= len(merged):
+            return []
+            
+        row = merged.iloc[frame_idx]
+        current_time = row['timestamp']
+        
+        # 2 seconds trail (a reference from animator.py)
+        trail_start = current_time - pd.Timedelta(seconds=2.0)
+        trail_df = merged.iloc[:frame_idx+1]
+        trail_df = trail_df[trail_df['timestamp'] >= trail_start]
+        
+        line1.set_data(trail_df['x1'], trail_df['y1'])
+        line2.set_data(trail_df['x2'], trail_df['y2'])
+        scatter1.set_data([row['x1']], [row['y1']])
+        scatter2.set_data([row['x2']], [row['y2']])
+        conn_line.set_data([row['x1'], row['x2']], [row['y1'], row['y2']])
+        
+        mid_x = (row['x1'] + row['x2']) / 2
+        mid_y = (row['y1'] + row['y2']) / 2
+        dist_val = row['distance']
+        dist_annotation.set_position((mid_x, mid_y))
+        dist_annotation.set_text(f"{dist_val:.2f}m")
+        
+        ts_str = pd.Timestamp(current_time).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        ttc_val = row['ttc']
+        ttc_str = f"{ttc_val:.2f} s" if (ttc_val is not None and not np.isinf(ttc_val) and not np.isnan(ttc_val)) else "N/A"
+        
+        info_text.set_text(
+            f"Time: {ts_str}\n"
+            f"Distance: {dist_val:.2f} m\n"
+            f"TTC: {ttc_str}"
+        )
+        return [line1, line2, scatter1, scatter2, conn_line, dist_annotation, info_text]
+        
+    fps = 10
+    writer = manimation.PillowWriter(fps=fps)
+    anim = manimation.FuncAnimation(fig, animate, frames=len(merged), interval=1000/fps, blit=True)
+    anim.save(str(output_path), writer=writer)
+    plt.close(fig)
+    return
+
 def plot_pair_analysis(
     df: pd.DataFrame,
     pair_id: str,
     output_dir: str,
-    show_plot: bool = False
+    show_plot: bool = False,
+    dpi: int = 500,
+    event_timestamp: Optional[str] = None
 ) -> None:
     """Generate complete trajectory analysis plots for a pair."""
     # Parse pair_id
@@ -396,32 +568,39 @@ def plot_pair_analysis(
     fig1, ax1 = plt.subplots(figsize=(11, 8))
     plot_trajectories(traj1, traj2, id1, id2, ax=ax1)
     plt.tight_layout()
-    fig1.savefig(os.path.join(save_dir, "trajectory.png"), dpi=150, bbox_inches='tight')
+    fig1.savefig(os.path.join(save_dir, "trajectory.png"), dpi=500, bbox_inches='tight')
     
     # Figure 2: Distance over time
     fig2, ax2 = plt.subplots(figsize=(12, 6))
     plot_distance_over_time(metrics, ax=ax2)
     plt.tight_layout()
-    fig2.savefig(os.path.join(save_dir, "distance.png"), dpi=150, bbox_inches='tight')
+    fig2.savefig(os.path.join(save_dir, "distance.png"), dpi=500, bbox_inches='tight')
     
     # Figure 3: Closing speed over time
     fig3, ax3 = plt.subplots(figsize=(12, 6))
     plot_closing_speed_over_time(metrics, ax=ax3)
     plt.tight_layout()
-    fig3.savefig(os.path.join(save_dir, "closing_speed.png"), dpi=150, bbox_inches='tight')
+    fig3.savefig(os.path.join(save_dir, "closing_speed.png"), dpi=500, bbox_inches='tight')
     
     # Figure 4: Velocity comparison over time
     fig4, ax4 = plt.subplots(figsize=(12, 6))
     plot_velocity_over_time(metrics, id1, id2, ax=ax4)
     plt.tight_layout()
-    fig4.savefig(os.path.join(save_dir, "velocity.png"), dpi=150, bbox_inches='tight')
+    fig4.savefig(os.path.join(save_dir, "velocity.png"), dpi=500, bbox_inches='tight')
     
     # Figure 5: Yaw difference over time
     fig5, ax5 = plt.subplots(figsize=(12, 6))
     plot_yaw_diff_over_time(metrics, ax=ax5)
     plt.tight_layout()
-    fig5.savefig(os.path.join(save_dir, "yaw_diff.png"), dpi=150, bbox_inches='tight')
+    fig5.savefig(os.path.join(save_dir, "yaw_diff.png"), dpi=500, bbox_inches='tight')
     
+    # Save GIF animation
+    try:
+        gif_file = os.path.join(save_dir, "animation.gif")
+        save_animation_gif(df, id1, id2, gif_file, dpi=dpi, event_timestamp=event_timestamp)
+    except Exception as e:
+        print(f"  \N{CROSS MARK} Failed to save animation.gif: {e}")
+
     if show_plot:
         plt.show()
     else:
@@ -490,7 +669,8 @@ def plot_all_pairs_from_csv(
     data_dir: Optional[str] = None,
     date: Optional[str] = None,
     output_dir: Optional[str] = None,
-    show_plots: bool = False
+    show_plots: bool = False,
+    dpi: int = 150
 ) -> None:
     """
     Generate plots for all pairs in IRSM lanes.csv file.
@@ -522,8 +702,9 @@ def plot_all_pairs_from_csv(
     # Read CSV
     detections_df = pd.read_csv(csv_path)
     
-    # Extract unique pair_ids
-    pair_ids = detections_df['pair_id'].unique()
+    # Get unique pairs with their first timestamp row
+    unique_pairs_df = detections_df.groupby('pair_id', as_index=False).first()
+    pair_ids = unique_pairs_df['pair_id'].values
     print(f"Found {len(pair_ids)} unique pairs to plot")
     
     # Load data efficiently if not provided
@@ -550,13 +731,17 @@ def plot_all_pairs_from_csv(
     print(f"{'='*60}\n")
     
     # Process each pair
-    for pair_id in tqdm(pair_ids, desc="Processing pairs", unit="pair"):
+    for _, row in tqdm(unique_pairs_df.iterrows(), total=len(unique_pairs_df), desc="Processing pairs", unit="pair"):
+        pair_id = row['pair_id']
+        ts = row['timestamp'] if 'timestamp' in row else None
         try:
             plot_pair_analysis(
                 df=data_df,
                 pair_id=pair_id,
                 output_dir=output_dir,
-                show_plot=show_plots
+                show_plot=show_plots,
+                dpi=dpi,
+                event_timestamp=str(ts) if ts is not None else None
             )
             successful += 1
         except Exception as e:
