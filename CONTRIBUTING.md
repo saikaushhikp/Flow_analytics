@@ -1,10 +1,10 @@
 # Contributing Guide
 
 > [!NOTE]  
-> This guide summarizes the work completed up to Last commit [`05855ddd8f29a805b78d07301f733c41fdae0f51`](https://github.com/saikaushhikp/Flow_analytics/tree/05855ddd8f29a805b78d07301f733c41fdae0f51)  
+> This guide summarizes the work completed up to Last commit [`72b75ca5f7eaf85b88c48465ec873379fae19149`](https://github.com/saikaushhikp/Flow_analytics/tree/72b75ca5f7eaf85b88c48465ec873379fae19149)  
 > and also explains how to execute the main commands in this repository.
 
-> [!TIP]
+> [!TIP]  
 > Do not push changes directly to the `main` branch. 
 > Create a branch named in the form `<name>/<feature-name>`, open a pull request for review, and merge only after verification.
 
@@ -154,7 +154,13 @@ The typical flow is:
 
 ## How To Run The Main Executables
 
-All commands below assume you are at the repository root. The Brussels parquet data used for the active validation window is expected to live under the repository-local `data/` folder.
+All commands below assume you are at the repository root. The Brussels parquet data used for the active validation window is expected to live under the repository-local `data/` folder.  
+
+> [!CAUTION]  
+> The below commands and their arguments are chosen inorder to `fit` inside `16GB` memory of a normal Consumer Laptop System.  
+> The below commands assume that the execution system is [`Linux`](https://en.wikipedia.org/wiki/Linux).  
+> If any of the commands doesn't work/throw an error on other OS like [`Windows`](https://en.wikipedia.org/wiki/Microsoft_Windows),  
+> try to troubleshoot the command execution format.(typical examples include using `python3` or `py` instead of `python` and using “\\” instead of “/” in paths)
 
 <details>
 <summary><b>Brussels M-DRAC pipelines</b></summary>
@@ -162,13 +168,39 @@ All commands below assume you are at the repository root. The Brussels parquet d
 Run the Brussels lane pipeline:
 
 ```bash
-python regions/brussels/lane_main.py --start-date 2025-06-01 --end-date 2025-06-01
+python regions/brussels/lane_main.py --start-date 2025-06-01 --start-time 00 --end-date 2025-06-01 --data-dir data --output-dir results/mdrac --max-hours 24
+
+python regions/brussels/lane_main.py --start-date 2025-06-02 --start-time 00 --end-date 2025-06-02 --data-dir data --output-dir results/mdrac --max-hours 24
+
+# for june 3, 1 hour hasn't been process to avoid OOM issues
+python regions/brussels/lane_main.py --start-date 2025-06-03 --start-time 01 --end-date 2025-06-03 --data-dir data --output-dir results/mdrac --max-hours 23
+
+python regions/brussels/lane_main.py --start-date 2025-06-04 --start-time 00 --end-date 2025-06-04 --data-dir data --output-dir results/mdrac --max-hours 24
+
+python regions/brussels/lane_main.py --start-date 2025-06-05 --start-time 00 --end-date 2025-06-05 --data-dir data --output-dir results/mdrac --max-hours 24
+
+python regions/brussels/lane_main.py --start-date 2025-06-06 --start-time 00 --end-date 2025-06-06 --data-dir data --output-dir results/mdrac --max-hours 24
+
+python regions/brussels/lane_main.py --start-date 2025-06-07 --start-time 00 --end-date 2025-06-07 --data-dir data --output-dir results/mdrac --max-hours 24
 ```
 
 Run the Brussels crosswalk pipeline:
 
 ```bash
-python regions/brussels/crosswalk_main.py --start-date 2025-06-01 --end-date 2025-06-01
+python regions/brussels/crosswalk_main.py --start-date 2025-06-01 --start-time 00 --end-date 2025-06-01 --data-dir data --output-dir results/mdrac --max-hours 24
+
+python regions/brussels/crosswalk_main.py --start-date 2025-06-02 --start-time 00 --end-date 2025-06-02 --data-dir data --output-dir results/mdrac --max-hours 24
+
+# for june 3, 1 hour hasn't been process to avoid OOM issues
+python regions/brussels/crosswalk_main.py --start-date 2025-06-03 --start-time 01 --end-date 2025-06-03 --data-dir data --output-dir results/mdrac --max-hours 23
+
+python regions/brussels/crosswalk_main.py --start-date 2025-06-04 --start-time 00 --end-date 2025-06-04 --data-dir data --output-dir results/mdrac --max-hours 24
+
+python regions/brussels/crosswalk_main.py --start-date 2025-06-05 --start-time 00 --end-date 2025-06-05 --data-dir data --output-dir results/mdrac --max-hours 24
+
+python regions/brussels/crosswalk_main.py --start-date 2025-06-06 --start-time 00 --end-date 2025-06-06 --data-dir data --output-dir results/mdrac --max-hours 24
+
+python regions/brussels/crosswalk_main.py --start-date 2025-06-07 --start-time 00 --end-date 2025-06-07 --data-dir data --output-dir results/mdrac --max-hours 24
 ```
 
 Run both Brussels pipelines over a bounded smoke window:
@@ -177,10 +209,18 @@ Run both Brussels pipelines over a bounded smoke window:
 python checks/run_brussels_smoke_window.py --start-date 2025-06-01 --end-date 2025-06-01 --max-hours 24
 ```
 
-Summarize the active Brussels validation artifacts:
+Plot the results using:
+
+```bash
+# manually edit the plotter.py to change the date and region for plotting
+python plotter.py
+```
+
+Summarize the active Brussels validation artifacts from both M-DRAC pipelines and the IRSM lane pipeline:
 
 ```bash
 python checks/summarize_active_results.py
+# ./next_steps/UPDATED_brussels_validation_summary.md will be updated.
 ```
 
 Run the active pipeline sanity checks:
@@ -195,34 +235,64 @@ python checks/active_pipeline_checks.py
 <details>
 <summary><b>IRSM generation and detection</b></summary>
 
-Generate IRSM lane risk vectors:
+Generate IRSM lane risk vectors(_data generation truncated for few hours to avoid OOM issues_):
 
 ```bash
-python irsm/data_generation.py --date 2025-06-01
+python irsm/data_generation.py --date 2025-06-01 --start-time 00 --max-hours 24
+
+python irsm/data_generation.py --date 2025-06-02 --start-time 03 --max-hours 17
+
+python irsm/data_generation.py --date 2025-06-03 --start-time 04 --max-hours 16
+
+python irsm/data_generation.py --date 2025-06-04 --start-time 03 --max-hours 18
+
+python irsm/data_generation.py --date 2025-06-05 --start-time 03 --max-hours 18
+
+python irsm/data_generation.py --date 2025-06-06 --start-time 03 --max-hours 18
+
+python irsm/data_generation.py --date 2025-06-07 --start-time 02 --max-hours 20
+
 ```
 
 Run Isolation Forest anomaly detection:
 
 ```bash
 python irsm/models/isolation_forest.py
+# edit irsm/irsm_config.yaml to change the model hyperparameters like Date & etc.
 ```
 
 Run Gaussian anomaly detection if you are using that path:
 
 ```bash
 python irsm/models/gaussian_anomaly.py
+# edit irsm/irsm_config.yaml to change the model hyperparameters like Date & etc.
 ```
 
 Run supervised IRSM detection:
 
 ```bash
 python irsm/supervised_detect.py
+# edit irsm/irsm_config.yaml to change the model hyperparameters like Date & etc.
+```
+
+Plots and visualizations for IRSM can be generated using:
+
+```bash
+python irsm/irsm_plotter.py
+python irsm/visualize_risk.py
+# edit irsm/irsm_config.yaml to change the Date & etc.
 ```
 
 Compare M-DRAC and IRSM outputs for a day:
 
 ```bash
 python irsm/compare_mdrac_irsm.py --date 2025-06-01
+python irsm/compare_mdrac_irsm.py --date 2025-06-02
+python irsm/compare_mdrac_irsm.py --date 2025-06-03
+python irsm/compare_mdrac_irsm.py --date 2025-06-04
+python irsm/compare_mdrac_irsm.py --date 2025-06-05
+python irsm/compare_mdrac_irsm.py --date 2025-06-06
+python irsm/compare_mdrac_irsm.py --date 2025-06-07
 ```
 </details>
 
