@@ -400,7 +400,7 @@ def tune_crosswalks(cw_pairs, gold_df, dates, config):
 def main():
     parser = argparse.ArgumentParser(description="Tune M-DRAC with restricted memory constraints")
     parser.add_argument('--max-hours', type=int, default=20, help="Maximum hourly folders to process (strictly limited to <= 20)")
-    parser.add_argument('--start-hour-index', type=int, default=0, help="Index of the first hourly folder to load (helps slice 168 hours of data)")
+    parser.add_argument('--start-hour-index', type=int, default=3, help="Index of the first hourly folder to load (helps slice 168 hours of data)")
     args = parser.parse_args()
     
     # Strictly limit to 20 hours to prevent out-of-memory errors

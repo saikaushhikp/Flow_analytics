@@ -1,14 +1,14 @@
 {
-  "val_auc": 0.8664596273291925,
+  "val_auc": 0.7391304347826086,
   "val_precision_at_10": 0.09999999999999999,
-  "test_auc": 0.6322188449848025,
-  "test_precision_at_10": 0.1,
+  "test_auc": 0.5714285714285714,
+  "test_precision_at_10": 0.09999999999999999,
   "coefficients": {
-    "composite_mdrac": -0.05213731965164509,
-    "isolation_forest": 0.1801381137475341,
-    "gaussian_anomaly": -0.01295111918089169,
-    "random_forest_prob": 1.235592763909907,
-    "xgboost_prob": 2.829990223262588
+    "composite_mdrac": 0.04169849053255753,
+    "isolation_forest": -0.5284269046612142,
+    "gaussian_anomaly": -0.14668174355247998,
+    "random_forest_prob": 1.7440430578305708,
+    "xgboost_prob": 2.4835091239695317
   },
-  "intercept": -6.117651794495422
+  "intercept": -6.747736185661518
 }

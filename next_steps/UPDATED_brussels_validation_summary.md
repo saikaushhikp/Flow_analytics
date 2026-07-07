@@ -1,6 +1,6 @@
 # Brussels Active Validation Summary
 
-Date: 2026-06-15
+Date: 2026-07-07
 
 Scope: active Brussels M-DRAC lane/crosswalk smoke validation and IRSM lane validation. Oulu, SPF production, VLM validation, and supervised IRSM remain deferred.
 
@@ -8,56 +8,59 @@ Scope: active Brussels M-DRAC lane/crosswalk smoke validation and IRSM lane vali
 
 The current reproducible Brussels outputs under `results/mdrac/` were generated with bounded hourly smoke windows to avoid the known full-day lane memory issue.
 
-| Date | Lane Conflicts | Crosswalk Conflicts | Lane Schema | Crosswalk Schema |
-| --- | ---: | ---: | --- | --- |
-| 2025-06-01 | 2 | 7 | ok | ok |
-| 2025-06-02 | 5 | 39 | ok | ok |
-| 2025-06-03 | 5 | 33 | ok | ok |
-| 2025-06-04 | 8 | 30 | ok | ok |
-| 2025-06-05 | 4 | 36 | ok | ok |
-| 2025-06-06 | 4 | 17 | ok | ok |
-| 2025-06-07 | 2 | 13 | ok | ok |
+| Date | Lane Conflicts | Crosswalk Conflicts | 
+| --- | ---: | ---: |
+| 2025-06-01 | 1 | 4 |
+| 2025-06-02 | 7 | 13 |
+| 2025-06-03 | 8 | 12 |
+| 2025-06-04 | 5 | 14 |
+| 2025-06-05 | 12 | 11 |
+| 2025-06-06 | 5 | 13 |
+| 2025-06-07 | 6 | 9 |
 
 ## Detection Breakdown
 
 | Source | Zone | Count |
 | --- | --- | ---: |
-| crosswalks | 1015 | 27 |
-| crosswalks | 1016 | 13 |
-| crosswalks | 1017 | 50 |
-| crosswalks | 1018 | 44 |
-| crosswalks | 1019 | 41 |
-| lanes | B-L2 | 1 |
-| lanes | D-L1 | 16 |
-| lanes | E-L1 | 8 |
-| lanes | E-L2 | 5 |
+| crosswalks | 1015 | 8 |
+| crosswalks | 1017 | 35 |
+| crosswalks | 1018 | 14 |
+| crosswalks | 1019 | 16 |
+| crosswalks | 1052 | 3 |
+| lanes | Intersection | 1 |
+| lanes | Road Amandiers | 2 |
+| lanes | Road Houba North Ext-Int | 6 |
+| lanes | Road Houba South Ext-Int | 10 |
+| lanes | Road Houba South Int-Ext [1] | 1 |
+| lanes | Road Houba South Int-Ext [2] | 2 |
+| lanes | Road Magnolias Ext-Int | 22 |
 
 MDRAC severity distribution for detected conflicts:
 
-- Count: 205
-- Min: 3.401
-- Median: 7.005
-- Max: 22.273
+- Count: 120
+- Min: 3.459
+- Median: 6.438
+- Max: 23.337
 
 Top detected conflicts:
 
 | Date | Source | Zone | IDs | MDRAC | TTC | Link |
 | --- | --- | --- | --- | ---: | ---: | --- |
-| 2025-06-04 | lanes | E-L1 | 13169970-13169979 | 22.273 | 0.816 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-04T05:15:51Z |
-| 2025-06-01 | lanes | D-L1 | 10652881-10653051 | 22.208 | 0.831 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-01T12:12:15Z |
-| 2025-06-06 | lanes | D-L1 | 15803196-15805017 | 21.659 | 0.881 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-06T13:47:00Z |
-| 2025-06-02 | lanes | D-L1 | 11581626-11581878 | 18.727 | 0.998 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T12:42:09Z |
-| 2025-06-05 | lanes | E-L2 | 14150306-14150496 | 17.555 | 0.659 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-05T05:39:39Z |
-| 2025-06-07 | lanes | B-L2 | 16667627-16667664 | 16.854 | 0.938 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-07T12:51:17Z |
-| 2025-06-05 | lanes | E-L2 | 14150154-14150306 | 16.272 | 0.896 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-05T05:39:24Z |
-| 2025-06-02 | lanes | D-L1 | 11196762-11196842 | 16.163 | 0.807 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T05:19:51Z |
-| 2025-06-05 | crosswalks | 1017 | 14788697-14789479 | 16.025 | 1.097 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-05T15:19:19Z |
-| 2025-06-07 | crosswalks | 1017 | 16351930-16352212 | 15.356 | 1.015 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-07T06:58:15Z |
+| 2025-06-05 | lanes | Road Magnolias Ext-Int | 14697579-14697780 | 23.337 | 0.794 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-05T14:09:50Z |
+| 2025-06-03 | lanes | Road Magnolias Ext-Int | 12269933-12270233 | 23.052 | 0.345 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-03T07:45:46Z |
+| 2025-06-05 | lanes | Road Magnolias Ext-Int | 14660702-14662073 | 22.646 | 0.792 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-05T13:42:42Z |
+| 2025-06-05 | lanes | Road Magnolias Ext-Int | 14573531-14573936 | 22.151 | 0.898 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-05T12:43:07Z |
+| 2025-06-02 | lanes | Road Houba South Ext-Int | 11443714-11443999 | 21.272 | 0.478 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T09:52:07Z |
+| 2025-06-07 | lanes | Road Houba South Ext-Int | 16528379-16529412 | 21.173 | 0.485 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-07T10:38:01Z |
+| 2025-06-05 | lanes | Road Houba South Ext-Int | 14349273-14349410 | 20.838 | 0.496 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-05T08:41:37Z |
+| 2025-06-06 | lanes | Road Houba South Ext-Int | 16012485-16015699 | 20.613 | 0.718 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-06T17:28:43Z |
+| 2025-06-03 | lanes | Road Magnolias Ext-Int | 12856400-12856458 | 20.086 | 0.946 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-03T16:10:01Z |
+| 2025-06-03 | lanes | Road Houba South Ext-Int | 12522217-12522338 | 19.855 | 0.506 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-03T11:52:42Z |
 
 ## IRSM
 
-- Lane risk vectors for `2025-06-01`: 2318.
-- Isolation Forest anomalies for `2025-06-01`: 6.
+- Lane risk vectors for `2025-06-01`: 4205.
+- Isolation Forest anomalies for `2025-06-01`: 5.
 - Comparison report: `irsm/results/brussels/2025-06-01/mdrac_irsm_comparison.md`.
 
 ## Current Decision

@@ -7,49 +7,49 @@ Based on probability calibration, validation-selected thresholds, and SMOTE resa
 ### Model: RANDOM_FOREST
 | Strategy | Val Precision@10 | Val AUC | Threshold |
 | --- | --- | --- | --- |
-| no_smote | 0.100 | 0.888 | 0.020 |
-| smote_gold_only | 0.100 | 0.814 | 0.040 |
-| smote_hybrid | 0.100 | 0.898 | 0.020 |
+| no_smote | 0.100 | 0.742 | 0.030 |
+| smote_gold_only | 0.100 | 0.711 | 0.020 |
+| smote_hybrid | 0.100 | 0.798 | 0.020 |
 
 ### Model: XGBOOST
 | Strategy | Val Precision@10 | Val AUC | Threshold |
 | --- | --- | --- | --- |
-| no_smote | 0.100 | 0.835 | 0.010 |
-| smote_gold_only | 0.100 | 0.851 | 0.050 |
-| smote_hybrid | 0.086 | 0.842 | 0.030 |
+| no_smote | 0.071 | 0.776 | 0.020 |
+| smote_gold_only | 0.100 | 0.758 | 0.070 |
+| smote_hybrid | 0.100 | 0.786 | 0.010 |
 
 ### Model: NEURAL_NETWORK
 | Strategy | Val Precision@10 | Val AUC | Threshold |
 | --- | --- | --- | --- |
-| no_smote | 0.086 | 0.823 | 0.190 |
-| smote_gold_only | 0.086 | 0.829 | 0.080 |
-| smote_hybrid | 0.086 | 0.842 | 0.060 |
+| no_smote | 0.100 | 0.727 | 0.030 |
+| smote_gold_only | 0.043 | 0.742 | 0.020 |
+| smote_hybrid | 0.071 | 0.727 | 0.030 |
 
 ## 2. Final Selected Model Configurations
 
 ### RANDOM_FOREST
 - **SMOTE Strategy**: SMOTE_HYBRID
-- **Val AUC**: 0.898
+- **Val AUC**: 0.798
 - **Val Precision@10**: 0.100
 - **Operating Threshold**: 0.020
-- **Test AUC**: 0.666
-- **Test Precision**: 0.300
+- **Test AUC**: 0.778
+- **Test Precision**: 0.375
 - **Test Recall**: 0.429
 
 ### XGBOOST
-- **SMOTE Strategy**: SMOTE_GOLD_ONLY
-- **Val AUC**: 0.851
+- **SMOTE Strategy**: SMOTE_HYBRID
+- **Val AUC**: 0.786
 - **Val Precision@10**: 0.100
-- **Operating Threshold**: 0.050
-- **Test AUC**: 0.596
-- **Test Precision**: 0.200
-- **Test Recall**: 0.286
+- **Operating Threshold**: 0.010
+- **Test AUC**: 0.720
+- **Test Precision**: 0.375
+- **Test Recall**: 0.429
 
 ### NEURAL_NETWORK
-- **SMOTE Strategy**: SMOTE_HYBRID
-- **Val AUC**: 0.842
-- **Val Precision@10**: 0.086
-- **Operating Threshold**: 0.060
-- **Test AUC**: 0.705
-- **Test Precision**: 0.125
-- **Test Recall**: 0.143
+- **SMOTE Strategy**: NO_SMOTE
+- **Val AUC**: 0.727
+- **Val Precision@10**: 0.100
+- **Operating Threshold**: 0.030
+- **Test AUC**: 0.805
+- **Test Precision**: 0.000
+- **Test Recall**: 0.000

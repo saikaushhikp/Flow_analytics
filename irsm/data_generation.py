@@ -58,6 +58,7 @@ def _pair_config(main_config: dict, irsm_config: dict) -> dict:
 def generate_risk_vectors(
     region: str = "brussels",
     date: str | None = None,
+    start_time: str = "00",
     input_dir: str | Path | None = None,
     output_base: str | Path | None = None,
     irsm_config: dict | None = None,
@@ -93,6 +94,7 @@ def generate_risk_vectors(
         input_dir,
         date,
         date,
+        start_time=start_time,
         dtypes=main_config["data"]["dtypes"],
         max_hours=max_hours,
         sample_limit=sample_limit,
@@ -144,6 +146,7 @@ def main() -> None:
     parser.add_argument("--main-config", default=str(default_config_path()))
     parser.add_argument("--region", default=None)
     parser.add_argument("--date", default=None)
+    parser.add_argument("--start-time", default="00", help="Start hour on the start date (HH or HH:MM). Default: 00")
     parser.add_argument("--input-dir", default=None)
     parser.add_argument("--output-base", default=None)
     parser.add_argument("--skip-preprocessing", action="store_true")
@@ -156,6 +159,7 @@ def main() -> None:
     generate_risk_vectors(
         region=args.region or irsm_config.get("region", "brussels"),
         date=args.date or irsm_config.get("date"),
+        start_time=args.start_time,
         input_dir=args.input_dir,
         output_base=args.output_base,
         irsm_config=irsm_config,

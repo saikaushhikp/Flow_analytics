@@ -23,7 +23,15 @@ import numpy as np
 
 def load_zones_by_category(region):
     """Load zones grouped by category"""
-    if region == 'oulu':
+    if region == 'brussels':
+        from regions.brussels.zones import get_lane_zones, get_footpath_zones, get_crosswalk_zones
+        
+        categories = {
+            'Lanes': get_lane_zones(),
+            'Footpaths': get_footpath_zones(),
+            'Crosswalks': get_crosswalk_zones()
+        }
+    elif region == 'oulu':      # to be noted that the oulu region hs been deprecated as the scope of this project is now limited to brussels only. However, the code is still kept for reference and future use.
         from regions.oulu.zones import get_crosswalk_zone, get_footpath_zones, get_lane_zones, get_near_miss_zones
         
         categories = {
@@ -31,14 +39,6 @@ def load_zones_by_category(region):
             'Footpaths': get_footpath_zones(),
             'Lanes': get_lane_zones(),
             'Near-Miss Zones': get_near_miss_zones()
-        }
-    elif region == 'brussels':
-        from regions.brussels.zones import get_lane_zones, get_footpath_zones, get_crosswalk_zones
-        
-        categories = {
-            'Lanes': get_lane_zones(),
-            'Footpaths': get_footpath_zones(),
-            'Crosswalks': get_crosswalk_zones()
         }
     else:
         raise ValueError(f"Unknown region: {region}")
@@ -177,7 +177,7 @@ def plot_all_zones(region='brussels'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Plot all zones with proper aspect ratio')
     parser.add_argument('--region', type=str, default='brussels',
-                       choices=['oulu', 'brussels'],
+                       choices=['brussels', 'oulu'],
                        help='Region to plot (default: brussels)')
     
     args = parser.parse_args()

@@ -109,8 +109,8 @@ def main() -> None:
         "",
         "The current reproducible Brussels outputs under `results/mdrac/` were generated with bounded hourly smoke windows to avoid the known full-day lane memory issue.",
         "",
-        "| Date | Lane Conflicts | Crosswalk Conflicts | Lane Schema | Crosswalk Schema |",
-        "| --- | ---: | ---: | --- | --- |",
+        "| Date | Lane Conflicts | Crosswalk Conflicts | ",
+        "| --- | ---: | ---: |",
     ]
 
     for row in summary.to_dict("records"):
@@ -118,8 +118,7 @@ def main() -> None:
         crosswalk_path = args.mdrac_root / "brussels" / "crosswalks" / row["date"] / f"mdrac_{row['date']}.csv"
         lines.append(
             f"| {row['date']} | {_format_count(row['lane_conflicts'])} | "
-            f"{_format_count(row['crosswalk_conflicts'])} | {_schema_status(lane_path)} | "
-            f"{_schema_status(crosswalk_path)} |"
+            f"{_format_count(row['crosswalk_conflicts'])} |"
         )
 
     lines.extend(["", "## Detection Breakdown", ""])
