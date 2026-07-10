@@ -76,12 +76,12 @@ filters:
   vehicle_labels: [4, 6, 7, 8]  # car, van, truck, bus
   
   # Basic motion filters
-  min_vehicle_speed: 0.3     # m/s - filters stationary/parking vehicles
+  min_vehicle_speed: 0.1     # m/s - filters stationary/parking vehicles
   max_distance: 8.0          # m - maximum distance between vehicles to consider
   max_lateral_distance: 1.8  # m - maximum perpendicular distance
   
   # Conflict detection filters
-  max_ttc: 1.8               # seconds - Time-To-Collision threshold
+  max_ttc: 1.5               # seconds - Time-To-Collision threshold
   min_closing_speed: 0.75     # m/s - minimum rate of gap closure
   min_speed_diff: 0.5        # m/s - follower must be faster than leader
 
@@ -236,3 +236,49 @@ output:
   
   # Replay link template (region-specific)
   replay_base_url: "https://di-india-collab.flow-analytics.io/tools/replay/"
+
+# ---------------------------------------------------------------------------
+# Global Post-Processing Filters (Applies to all models)
+# ---------------------------------------------------------------------------
+global_filters:
+  use_ttc_filter: true               # Toggle Time-To-Collision and Closing Speed filtering
+  min_closing_speed: 1.0             # Minimum relative closing speed (m/s) to be considered a risk
+  max_ttc: 1.5                       # Maximum Time-To-Collision (s) to be considered a risk
+  
+  use_angle_filter: true             # Toggle Collision Angle filtering
+  parallel_angle_tolerance: 20.0     # Tolerance in degrees near 0° or 180° to classify as safe parallel driving
+
+  # Advanced False Positive Overlay Filters
+  use_escape_maneuver_filter: true   # Filter situations where normal braking can easily avoid collision
+  min_required_deceleration: 2.5     # m/s² - If required braking is lower than this, drop the event
+
+  use_ttr_filter: true               # Filter based on Time-To-React
+  max_ttr: 2.0                       # seconds - Maximum Time-To-React; drop if driver has plenty of time
+  prt: 1.0                           # seconds - Perception Reaction Time to subtract from TTC
+
+  use_entity_plausibility_filter: true # Filter out tracking artifacts/ghosts exceeding physical speeds
+  fp_velocity_max_speed:             # m/s - Maximum physical speed by vehicle class
+    1: 8.0     # pedestrian
+    2: 15.0    # bicycle
+    3: 40.0    # motorcycle
+    4: 55.0    # car
+    5: 12.0    # escooter
+    6: 45.0    # van
+    7: 40.0    # truck
+    8: 35.0    # bus
+
+# ---------------------------------------------------------------------------
+# Global Plotting Configuration
+# ---------------------------------------------------------------------------
+plotting:
+  plot_window_pre_s: 15.0            # Seconds before the incident to load/plot
+  plot_window_post_s: 15.0           # Seconds after the incident to load/plot
+
+# ---------------------------------------------------------------------------
+# Bhattacharyya Envelope Method Parameters
+# ---------------------------------------------------------------------------
+bhattacharyya:
+  env_prob_thresh: 0.25              # Minimum BC² overlap probability
+  env_time_horizon_s: 1.2            # Future projection window in seconds
+  env_time_steps: 6                  # Number of discrete time steps for projection
+  env_cov_epsilon: 1.0e-06           # Small value added to covariance matrix diagonal for numerical stability

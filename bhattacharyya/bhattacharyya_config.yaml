@@ -1,0 +1,41 @@
+# bhattacharyya_config.yaml
+# Configuration for the Bhattacharyya Envelope Near-Miss Detection module.
+#
+# This module ports the O(1) analytical Bhattacharyya Coefficient (BC) from the
+# AGC flowbyagc-main project to run as a standalone detection pipeline in
+# Flow_analytics, structured analogously to the irsm/ module.
+
+region: brussels
+
+date: "2025-06-01"
+
+data:
+  # Path to raw trajectory data (relative to repo root or absolute)
+  input_dir: null        # null → resolved from utils.brussels_data_dir()
+  output_base: bhattacharyya
+
+# ---------------------------------------------------------------------------
+# Pair generation (spatial proximity filter before BC computation)
+# ---------------------------------------------------------------------------
+pair_generation:
+  max_distance: 10.0      # (m) Only consider vehicle pairs within this radius
+  batch_size: 5000        # Timestamp batch size for pair generation
+
+# ---------------------------------------------------------------------------
+# Envelope detection parameters
+# ---------------------------------------------------------------------------
+detection:
+  prob_thresh: 0.50       # Min BC² to flag as near-miss (0 = all pairs, 1 = perfect overlap)
+  time_horizon_s: 1.2     # Future projection window (seconds)
+  time_steps: 6           # Number of time steps to project envelopes
+  uncertainty_growth: 0.1 # Fractional std growth per second during projection
+  cov_epsilon: 1.0e-6     # Covariance matrix regularisation
+
+# ---------------------------------------------------------------------------
+# Preprocessing (mirrors irsm/ preprocessing: keeps only moving objects)
+# ---------------------------------------------------------------------------
+preprocessing:
+  min_lifetime_frames: 5   # Drop tracks shorter than this
+  min_speed_kmh: 0.5       # Drop stationary objects (km/h)
+  remove_static: true      # Apply static object removal filter
+  remove_footpath: true    # Exclude vehicles in footpath zones

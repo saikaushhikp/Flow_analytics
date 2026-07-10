@@ -1,3 +1,6 @@
+# Personal understanding folder (local only)
+understanding_vipul/
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -14,6 +17,8 @@ wheels/
 Data/
 data/
 irsm/models/saved
+irsm/results
+results
 
 # Reference & testing files
 *test*

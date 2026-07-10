@@ -681,38 +681,86 @@ def plot_conflict_analysis(
     return fig1, fig2, fig3, fig4, fig5
 
 
+def get_packet_paths(data_dir: str, ts: pd.Timestamp) -> list:
+    """Get the paths to the 3 parquet packets around a timestamp."""
+    # Round down to nearest 15 minutes
+    current_packet = ts.floor('15min')
+    prev_packet = current_packet - pd.Timedelta(minutes=15)
+    next_packet = current_packet + pd.Timedelta(minutes=15)
+    
+    paths = []
+    for packet_ts in [prev_packet, current_packet, next_packet]:
+        folder_name = packet_ts.strftime('%Y-%m-%d-%H')
+        file_name = packet_ts.strftime('%Y-%m-%d-%H-%M.parquet')
+        path = os.path.join(data_dir, folder_name, file_name)
+        if os.path.exists(path):
+            paths.append(path)
+    return paths
+
+def load_data_for_time_window(data_dir: str, event_timestamp: pd.Timestamp, id1: int, id2: int, pre_s: float = 15.0, post_s: float = 15.0) -> pd.DataFrame:
+    """Lazy load data from 3 packets only around the event time."""
+    paths = get_packet_paths(data_dir, event_timestamp)
+    
+    if not paths:
+        return pd.DataFrame()
+        
+    start_time = event_timestamp - pd.Timedelta(seconds=pre_s)
+    end_time = event_timestamp + pd.Timedelta(seconds=post_s)
+    
+    dfs = []
+    dtypes = {
+        'id': 'int32',
+        'label': 'int8',
+        'pos_x': 'float32',
+        'pos_y': 'float32',
+        'vel': 'float32',
+        'vel_x': 'float32',
+        'vel_y': 'float32',
+        'yaw': 'float32',
+    }
+    
+    for path in paths:
+        df_chunk = pd.read_parquet(
+            path,
+            filters=[
+                ('timestamp', '>=', start_time),
+                ('timestamp', '<=', end_time),
+                ('id', 'in', [id1, id2])
+            ]
+        )
+        for col, dtype in dtypes.items():
+            if col in df_chunk.columns:
+                df_chunk[col] = df_chunk[col].astype(dtype)
+        dfs.append(df_chunk)
+        
+    if dfs:
+        df = pd.concat(dfs, ignore_index=True)
+        return df
+    return pd.DataFrame()
+
+def extract_ids_from_row(row: pd.Series) -> Tuple[int, int]:
+    """Dynamically extract id1 and id2 based on column names."""
+    if 'id1' in row and 'id2' in row:
+        return int(row['id1']), int(row['id2'])
+    elif 'id_obj1' in row and 'id_obj2' in row:
+        return int(row['id_obj1']), int(row['id_obj2'])
+    elif 'pair_id' in row:
+        parts = str(row['pair_id']).split('_')
+        if len(parts) == 2:
+            return int(parts[0]), int(parts[1])
+    raise ValueError(f"Could not extract IDs from row columns: {row.index.tolist()}")
+
 def plot_all_pairs_from_csv(
     csv_path: str,
-    data_df: pd.DataFrame,
+    data_dir: str,
     output_base_dir: Optional[str] = None,
     time_window: Optional[float] = None,
     show_plots: bool = False,
-    dpi: int = 150
+    dpi: int = 150,
+    pre_s: float = 15.0,
+    post_s: float = 15.0
 ) -> None:
-    """
-    Generate plots for all vehicle pairs in a CSV file.
-    
-    Reads M-DRAC detection results CSV and creates trajectory analysis plots
-    for each unique pair. Each pair gets its own subfolder.
-    
-    Args:
-        csv_path: Path to M-DRAC results CSV (with id1, id2 columns)
-        data_df: DataFrame with all trajectory data (from parquet files)
-        output_base_dir: Base directory for saving plots. If None, derived from csv_path
-        time_window: Optional time window (seconds) around conflict
-        show_plots: Whether to display plots (default: False for batch processing)
-    
-    Example:
-        >>> df = load_data('/data/clean', '2025-06-01', '2025-06-01')
-        >>> plot_all_pairs_from_csv(
-        ...     csv_path='results/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv',
-        ...     data_df=df
-        ... )
-        # Creates: results/mdrac/brussels/lanes/2025-06-01/plots/11520140_11520195/
-        #          results/mdrac/brussels/lanes/2025-06-01/plots/11531151_11531576/
-        #          etc.
-    """
-    # Read CSV to get all pairs
+    """Generate plots for all vehicle pairs in a CSV file."""
     print(f"\n{'='*60}")
     print(f"Batch Plotting from CSV")
     print(f"{'='*60}")
@@ -720,110 +768,68 @@ def plot_all_pairs_from_csv(
     
     detections_df = pd.read_csv(csv_path)
     
-    # Get unique pairs with their first timestamp row
-    unique_pairs_df = detections_df.groupby(['id1', 'id2'], as_index=False).first()
-    print(f"Found {len(unique_pairs_df)} unique pairs to plot")
+    if len(detections_df) == 0:
+        print("No detections found to plot.")
+        return
     
-    # Determine output directory
     if output_base_dir is None:
-        # Default: create 'plots' folder next to CSV file
         csv_dir = os.path.dirname(csv_path)
         output_base_dir = os.path.join(csv_dir, 'plots')
     
     os.makedirs(output_base_dir, exist_ok=True)
     print(f"Output directory: {output_base_dir}")
     
-    # Track statistics
     successful = 0
     failed = 0
     failed_pairs = []
     
-    print(f"\n{'='*60}")
-    print(f"Generating plots for {len(unique_pairs_df)} pairs...")
-    print(f"{'='*60}\n")
+    print(f"\nGenerating plots for {len(detections_df)} pairs...")
     
-    # Process each pair
-    for _, row in tqdm(unique_pairs_df.iterrows(), total=len(unique_pairs_df), desc="Processing pairs", unit="pair"):
-        id1 = row['id1']
-        id2 = row['id2']
-        ts = row['timestamp'] if 'timestamp' in row else None
+    for _, row in tqdm(detections_df.iterrows(), total=len(detections_df), desc="Processing pairs", unit="pair"):
         try:
+            id1, id2 = extract_ids_from_row(row)
+            
+            if 'timestamp' in row:
+                ts = pd.to_datetime(row['timestamp'])
+            elif 'ts' in row:
+                ts = pd.to_datetime(row['ts'])
+            else:
+                # Fallback to current time if no timestamp available (unlikely)
+                ts = pd.Timestamp.now()
+                
+            data_df = load_data_for_time_window(data_dir, ts, id1, id2, pre_s, post_s)
+            
+            if len(data_df) == 0:
+                raise ValueError(f"No trajectory data found for {id1}_{id2} near {ts}")
+            
             plot_conflict_analysis(
                 df=data_df,
-                id1=int(id1),
-                id2=int(id2),
-                time_window=time_window,
+                id1=id1,
+                id2=id2,
+                time_window=None,  # We already sliced exactly in lazy load
                 output_dir=output_base_dir,
                 show_plot=show_plots,
                 dpi=dpi,
-                event_timestamp=str(ts) if ts is not None else None
+                event_timestamp=str(ts)
             )
             successful += 1
         except Exception as e:
             failed += 1
-            failed_pairs.append((id1, id2, str(e)))
-            print(f"\n\N{CROSS MARK} Failed for pair ({id1}, {id2}): {e}\n")
+            # Try to get id1/id2 for error message if available
+            err_id = f"unknown pair"
+            try:
+                err_id = f"{id1}_{id2}"
+            except: pass
+            failed_pairs.append((err_id, str(e)))
+            print(f"\n\N{CROSS MARK} Failed for pair {err_id}: {e}\n")
     
-    # Summary
-    print(f"\n{'='*60}")
-    print(f"Batch Plotting Summary")
-    print(f"{'='*60}")
-    print(f"\N{heavy check mark} Successful: {successful}/{len(unique_pairs_df)}")
-    
+    print(f"\nBatch Plotting Summary")
+    print(f"Successful: {successful}/{len(detections_df)}")
     if failed > 0:
-        print(f" \N{CROSS MARK} Failed: {failed}/{len(unique_pairs_df)}")
-        print(f"\nFailed pairs:")
-        for id1, id2, error in failed_pairs:
-            print(f"  - ({id1}, {id2}): {error}")
-    
-    print(f"\nAll plots saved to: {output_base_dir}/")
-    print(f"{'='*60}\n")
-
-
-# =============================================================================
-# CONFIGURATION & DATA LOADING
-# =============================================================================
-def load_data(data_dir: str, start_date: str, end_date: str) -> pd.DataFrame:
-    """Load data with optimized dtypes for memory efficiency."""
-    dtypes = {
-        'id': 'int32',
-        'label': 'int8',
-        'pos_x': 'float32',
-        'pos_y': 'float32',
-        'pos_z': 'float32',
-        'vel': 'float32',
-        'vel_x': 'float32',
-        'vel_y': 'float32',
-        'yaw': 'float32',
-        'size_x': 'float32',
-        'size_y': 'float32',
-    }
-    
-    dfs = []
-    
-    for folder in tqdm(sorted(os.listdir(data_dir)), desc="Loading data"):
-        folder_path = os.path.join(data_dir, folder)
-        
-        if not os.path.isdir(folder_path):
-            continue
-        
-        if folder.startswith(start_date) or folder.startswith(end_date):
-            df_chunk = pd.read_parquet(folder_path)
-            
-            for col, dtype in dtypes.items():
-                if col in df_chunk.columns:
-                    df_chunk[col] = df_chunk[col].astype(dtype)
-            
-            dfs.append(df_chunk)
-            del df_chunk
-    
-    if dfs:
-        df = pd.concat(dfs, ignore_index=True)
-        del dfs
-        return df
-    else:
-        print("No data found for given date range.")
-        return pd.DataFrame()
+        print(f"Failed: {failed}/{len(detections_df)}")
+        for pair, error in failed_pairs:
+            print(f"  - {pair}: {error}")
+    print(f"All plots saved to: {output_base_dir}/")
 
 
 # =============================================================================
@@ -831,26 +837,15 @@ def load_data(data_dir: str, start_date: str, end_date: str) -> pd.DataFrame:
 # =============================================================================
 
 if __name__ == "__main__":
-    """
-    Batch plot generation for M-DRAC detection results.
-    """
-    
-    # Configuration
     from utils.paths import brussels_data_dir, output_root
-
+    
     DATA_DIR = str(brussels_data_dir())
     START_DATE = "2025-06-01"
-    END_DATE =   "2025-06-01"
-    
-    # Load trajectory data
-    print("Loading trajectory data...")
-    df = load_data(DATA_DIR, START_DATE, END_DATE)
-    print(f"Loaded {len(df)} records from {START_DATE} to {END_DATE}")
     
     CSV_PATH = str(output_root() / 'mdrac' / 'brussels' / 'lanes' / START_DATE / f'mdrac_{START_DATE}.csv')
     
     plot_all_pairs_from_csv(
         csv_path=CSV_PATH,
-        data_df=df,
-        show_plots=False  # Set True to display each plot (slow for many pairs)
+        data_dir=DATA_DIR,
+        show_plots=False
     )
