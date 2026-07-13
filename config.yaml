@@ -77,11 +77,11 @@ filters:
   
   # Basic motion filters
   min_vehicle_speed: 0.3     # m/s - filters stationary/parking vehicles
-  max_distance: 8.0          # m - maximum distance between vehicles to consider
+  max_distance: 7.5          # m - maximum distance between vehicles to consider
   max_lateral_distance: 1.8  # m - maximum perpendicular distance
   
   # Conflict detection filters
-  max_ttc: 1.8               # seconds - Time-To-Collision threshold
+  max_ttc: 1.5               # seconds - Time-To-Collision threshold
   min_closing_speed: 0.75     # m/s - minimum rate of gap closure
   min_speed_diff: 0.5        # m/s - follower must be faster than leader
 
@@ -144,27 +144,6 @@ mdrac:
   yaw_diff_rate_threshold: 15.0      # deg/s - yaw rate threshold
   longitudinal_yaw_threshold: 30.0   # degrees - threshold to classify as longitudinal
 
-
-# SPF (Safety Potential Field)
-spf:
-  enabled: false
-  status: "experimental-disabled"
-  note: "SPF code is retained for research, but is not part of the active runnable pipeline."
-
-  # Field parameters
-  beta_p: 0.5  # Physical field weight
-  beta_t: 0.3  # Temporal field weight
-  t_star: 3.0  # seconds - characteristic time scale
-  
-  # Detection threshold
-  min_spf: 0.7  # minimum SPF value to classify as conflict
-  
-  # Severity classification
-  severity:
-    moderate: 0.2  # moderate severity threshold
-    severe: 0.4    # severe severity threshold
-
-
 # POSTPROCESSING FILTERS
 postprocessing:
   # Teleportation Filter - removes unrealistic position jumps
@@ -194,40 +173,6 @@ visualization:
   plot_format: 'png'         # output format (png, pdf, svg)
   dpi: 150                   # plot resolution
 
-
-# VLM VALIDATION
-vlm:
-  # Primary backend
-  primary_backend: "gemini"  # "gemini" or "local"
-  
-  # Gemini API settings (free tier: 1500 requests/day)
-  gemini:
-    model: "gemini-2.5-flash"  # Updated: gemini-1.5-flash deprecated
-    api_key_env: "GEMINI_API_KEY"  # Read from environment variable
-    max_retries: 3
-    timeout: 30  # seconds
-    rate_limit_delay: 1  # seconds between requests
-  
-  
-  # Paths configuration (auto-constructed from day parameter)
-  paths:
-    base_results: "results/brussels/mdrac"
-    base_data: "/home/ubuntu/data/uploads/objects/clean"
-  
-  # Local model fallback
-  local:
-    model_id: "Qwen/Qwen2.5-VL-3B-Instruct"  # Default to 3B (faster on CPU)
-    # Options: "Qwen/Qwen2.5-VL-3B-Instruct" (7.1GB) or "Qwen/Qwen2.5-VL-7B-Instruct" (16GB)
-    device: "auto"  # "auto", "cpu", or "cuda"
-    torch_dtype: "float32"  # "float32" for CPU, "bfloat16" for GPU
-  
-  # Validation settings
-  confidence_threshold: 70  # Minimum confidence for "REAL_NEARMISS"
-  top_n_validate: 50        # Number of top events to validate
-  save_plots: true          # Save trajectory plots
-  plot_dpi: 150
-
-
 # OUTPUT
 output:
   save_format: 'csv'         # csv or xlsx
@@ -236,3 +181,49 @@ output:
   
   # Replay link template (region-specific)
   replay_base_url: "https://di-india-collab.flow-analytics.io/tools/replay/"
+
+# ---------------------------------------------------------------------------
+# Global Post-Processing Filters (Applies to all models)
+# ---------------------------------------------------------------------------
+global_filters:
+  use_ttc_filter: true               # Toggle Time-To-Collision and Closing Speed filtering
+  min_closing_speed: 1.0             # Minimum relative closing speed (m/s) to be considered a risk
+  max_ttc: 1.5                       # Maximum Time-To-Collision (s) to be considered a risk
+  
+  use_angle_filter: true             # Toggle Collision Angle filtering
+  parallel_angle_tolerance: 20.0     # Tolerance in degrees near 0° or 180° to classify as safe parallel driving
+
+  # Advanced False Positive Overlay Filters
+  use_escape_maneuver_filter: true   # Filter situations where normal braking can easily avoid collision
+  min_required_deceleration: 2.5     # m/s² - If required braking is lower than this, drop the event
+
+  use_ttr_filter: true               # Filter based on Time-To-React
+  max_ttr: 2.0                       # seconds - Maximum Time-To-React; drop if driver has plenty of time
+  prt: 1.0                           # seconds - Perception Reaction Time to subtract from TTC
+
+  use_entity_plausibility_filter: true # Filter out tracking artifacts/ghosts exceeding physical speeds
+  fp_velocity_max_speed:             # m/s - Maximum physical speed by vehicle class
+    1: 8.0     # pedestrian
+    2: 15.0    # bicycle
+    3: 40.0    # motorcycle
+    4: 55.0    # car
+    5: 12.0    # escooter
+    6: 45.0    # van
+    7: 40.0    # truck
+    8: 35.0    # bus
+
+# ---------------------------------------------------------------------------
+# Global Plotting Configuration
+# ---------------------------------------------------------------------------
+plotting:
+  plot_window_pre_s: 15.0            # Seconds before the incident to load/plot
+  plot_window_post_s: 15.0           # Seconds after the incident to load/plot
+
+# ---------------------------------------------------------------------------
+# Bhattacharyya Envelope Method Parameters
+# ---------------------------------------------------------------------------
+bhattacharyya:
+  env_prob_thresh: 0.25              # Minimum BC² overlap probability
+  env_time_horizon_s: 1.2            # Future projection window in seconds
+  env_time_steps: 6                  # Number of discrete time steps for projection
+  env_cov_epsilon: 1.0e-06           # Small value added to covariance matrix diagonal for numerical stability

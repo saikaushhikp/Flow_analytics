@@ -28,7 +28,7 @@ def _default_paths(region: str, date: str, irsm_config: dict) -> tuple[Path, Pat
     irsm_base = Path(irsm_config["data"]["output_base"]).expanduser()
     if not irsm_base.is_absolute():
         irsm_base = REPO_ROOT / irsm_base
-    irsm_path = irsm_base / "results" / region / date / "lanes_detections.csv"
+    irsm_path = irsm_base / "results" / region / date / "gaussian_detections.csv"
     report_path = irsm_base / "results" / region / date / "mdrac_irsm_comparison.md"
 
     return mdrac_path, irsm_path, report_path

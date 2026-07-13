@@ -1,3 +1,7 @@
+# Personal understanding folders (local only)
+understanding_vipul/
+.DS_Store
+
 # Python-generated files
 __pycache__/
 *.py[oc]

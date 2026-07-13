@@ -1,0 +1,9 @@
+date: '2025-06-01'
+mean_bc_score: 0.36711833289167933
+prob_thresh: 0.25
+region: brussels
+time_horizon_s: 1.2
+top_bc_score: 0.7741643821344143
+total_detection_rows: 38
+total_pairs_evaluated: 624852
+unique_conflicting_pairs: 38

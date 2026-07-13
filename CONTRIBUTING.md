@@ -158,7 +158,7 @@ All commands below assume you are at the repository root. The Brussels parquet d
 
 > [!CAUTION]  
 > The below commands and their arguments are chosen inorder to `fit` inside `16GB` memory of a normal Consumer Laptop System.  
-> The below commands assume that the execution system is [`Linux`](https://en.wikipedia.org/wiki/Linux).  
+> The below commands assume that the execution system is [`Linux`](https://en.wikipedia.org/wiki/Linux) / [`MacOS`](https://en.wikipedia.org/wiki/MacOS).  
 > If any of the commands doesn't work/throw an error on other OS like [`Windows`](https://en.wikipedia.org/wiki/Microsoft_Windows),  
 > try to troubleshoot the command execution format.(typical examples include using `python3` or `py` instead of `python` and using “\\” instead of “/” in paths)
 

@@ -1,0 +1,35 @@
+
+Applying Global Filters for 2025-06-01...
+[M-DRAC] 1 -> 1 detections
+[IRSM] 4 -> 2 detections
+[Bhattacharyya] 38 -> 6 detections
+
+Applying Global Filters for 2025-06-02...
+[M-DRAC] 6 -> 6 detections
+[IRSM] 6 -> 4 detections
+[Bhattacharyya] 61 -> 8 detections
+
+Applying Global Filters for 2025-06-03...
+[M-DRAC] 8 -> 7 detections
+[IRSM] 6 -> 4 detections
+[Bhattacharyya] 115 -> 18 detections
+
+Applying Global Filters for 2025-06-04...
+[M-DRAC] 4 -> 4 detections
+[IRSM] 7 -> 2 detections
+[Bhattacharyya] 87 -> 11 detections
+
+Applying Global Filters for 2025-06-05...
+[M-DRAC] 11 -> 11 detections
+[IRSM] 8 -> 4 detections
+[Bhattacharyya] 96 -> 12 detections
+
+Applying Global Filters for 2025-06-06...
+[M-DRAC] 5 -> 5 detections
+[IRSM] 9 -> 5 detections
+[Bhattacharyya] 106 -> 12 detections
+
+Applying Global Filters for 2025-06-07...
+[M-DRAC] 5 -> 4 detections
+[IRSM] 10 -> 6 detections
+[Bhattacharyya] 92 -> 11 detections

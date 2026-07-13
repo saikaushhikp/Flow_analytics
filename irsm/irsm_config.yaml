@@ -24,9 +24,9 @@ zones:
 
 # IRSM-Specific Pair Generation Settings
 pair_generation:
-  max_distance: 10.0                # meters - spatial proximity threshold
-  max_lateral: 2.0                  # meters - same lane threshold
-  max_ttc: 13.0                     # seconds - TTC threshold (wider than MDRAC's 10s)
+  max_distance: 7.5                # meters - spatial proximity threshold
+  max_lateral: 1.8                  # meters - same lane threshold
+  max_ttc: 12.0                     # seconds - TTC threshold (wider than MDRAC's 10s)
   min_closing_speed: 0.1            # m/s - minimum approach speed
   include_non_approaching: false    # Only approaching pairs (interacting)
   min_avg_mdrac_threshold: 1.0      # m/s² - minimum avg MDRAC to keep (MDRAC uses 3.4)
@@ -49,8 +49,8 @@ aggregation:
 
 # Model Configuration
 model:
-  contamination: 0.001  # 0.1% of pairs flagged as anomalies
-  n_estimators: 150
+  contamination: 0.0015  # 0.15% of pairs flagged as anomalies
+  n_estimators: 120
   random_state: 2026
   feature_cols:
     - mdrac

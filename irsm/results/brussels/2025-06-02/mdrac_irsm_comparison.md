@@ -1,25 +1,24 @@
 # M-DRAC vs IRSM Comparison
 
 - M-DRAC file: `/home/kaushik/Kezual/Flow_analytics/results/mdrac/brussels/lanes/2025-06-02/mdrac_2025-06-02.csv`
-- IRSM file: `/home/kaushik/Kezual/Flow_analytics/irsm/results/brussels/2025-06-02/lanes_detections.csv`
-- M-DRAC pairs: 7
-- IRSM anomaly pairs: 7
+- IRSM file: `/home/kaushik/Kezual/Flow_analytics/irsm/results/brussels/2025-06-02/gaussian_detections.csv`
+- M-DRAC pairs: 6
+- IRSM anomaly pairs: 6
 - Overlap: 1
-- M-DRAC only: 6
-- IRSM only: 6
+- M-DRAC only: 5
+- IRSM only: 5
 
 ## Overlap Pairs
 
-11579282_11579498
+11285877_11286220
 
 ## Top IRSM Cases For Manual Review
 
-| pair_id | timestamp | mdrac | ttc | closing_speed | link | anomaly_score |
-| --- | --- | --- | --- | --- | --- | --- |
-| 11192791_11192939 | 2025-06-02 05:14:27.837941885 | 39.95857391357422 | 0.5374962091445923 | 17.767818450927734 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T05:14:27Z | -0.0191406757126916 |
-| 11579282_11579498 | 2025-06-02 12:37:03.266794920 | 33.97487335205078 | 0.6867750287055969 | 14.08110237121582 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T12:37:03Z | -0.0188698550733765 |
-| 11578835_11579632 | 2025-06-02 12:37:13.666790962 | 41.188469886779785 | 0.4859284162521362 | 16.753311157226562 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T12:37:13Z | -0.0157044953183879 |
-| 11521822_11522089 | 2025-06-02 11:20:23.272974014 | 37.68357594807943 | 0.5359774231910706 | 16.15639877319336 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T11:20:23Z | -0.0148603787652878 |
-| 11384027_11385067 | 2025-06-02 08:34:33.243746996 | 21.56828079223633 | 0.5065456032752991 | 10.38266372680664 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T08:34:33Z | -0.0078802685915942 |
-| 11666637_11667006 | 2025-06-02 13:44:30.558263063 | 21.780780792236328 | 0.5125266313552856 | 9.39292335510254 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T13:44:30Z | -0.0053085835271943 |
-| 11289049_11289108 | 2025-06-02 06:40:40.361480951 | 28.316564559936523 | 0.5670952796936035 | 11.487853050231934 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T06:40:40Z | -3.5315578603700715e-06 |
+| pair_id | timestamp | mdrac | ttc | closing_speed | link |
+| --- | --- | --- | --- | --- | --- |
+| 11589384_11589417 | 2025-06-02 12:49:32.540616989 | 0.0799594544905618 | 4.53048038482666 | 0.6837188601493835 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T12:49:32Z |
+| 11633606_11637412 | 2025-06-02 13:28:07.636811972 | 0.6132783637804043 | 2.402683734893799 | 1.160114288330078 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T13:28:07Z |
+| 11431050_11431122 | 2025-06-02 09:35:57.234710932 | 4.297508106651146 | 0.8319584131240845 | 7.056779384613037 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T09:35:57Z |
+| 11831866_11831929 | 2025-06-02 16:10:38.385350943 | 20.3103141784668 | 0.9082819819450378 | 8.094757080078125 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T16:10:38Z |
+| 11285877_11286220 | 2025-06-02 06:38:18.691977978 | 31.1830753326416 | 0.3353922963142395 | 16.386260986328125 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T06:38:18Z |
+| 11579343_11579565 | 2025-06-02 12:37:07.871354103 | 33.10440762837728 | 0.1940517574548721 | 19.360271453857425 | https://di-india-collab.flow-analytics.io/tools/replay/2025-06-02T12:37:07Z |
