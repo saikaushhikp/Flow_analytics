@@ -37,7 +37,7 @@ def save_detection_results(conflicts: pd.DataFrame,
         conflicts: Detection results DataFrame
         output_dir: Base output directory
         method: Detection method - 'mdrac' or 'spf'  
-        region: Region name - 'brussels' or 'oulu'
+        region: Region name - 'brussels'
         date: Date string (YYYY-MM-DD)
         zone_name: Zone name - 'lanes', 'crosswalks', etc. (optional)
         format: Output format - 'csv' or 'xlsx'

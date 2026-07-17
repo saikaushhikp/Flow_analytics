@@ -1,306 +1,445 @@
 # Contributing Guide
 
-> [!NOTE]  
-> This guide summarizes the work completed up to Last commit [`eca88d44e52bbd57b02f9e0f6479cd9e1fa9305e`](https://github.com/saikaushhikp/Flow_analytics/tree/eca88d44e52bbd57b02f9e0f6479cd9e1fa9305e)  
-> and also explains how to execute the main commands in this repository.
+Last updated on: 2026-07-17
 
-> [!TIP]  
-> Do not push changes directly to the `main` branch. 
-> Create a branch named in the form `<name>/<feature-name>`, open a pull request for review, and merge only after verification.
+This guide is for engineers who understand traffic-safety analytics but are new to this repository. It covers both contribution expectations and the detailed command surface needed to run the active Brussels workflows correctly.
 
----
+## 1. Scope and Expectations
 
-This repository is a Brussels-first traffic safety analytics project. The active work centers on M-DRAC conflict detection and IRSM risk modeling for Brussels, with the current direction and open work captured in the documents under `next_steps/` such as `README.md`, `current_state.md`, `implementation_plan.md`, `UPDATED_NEW_implementation_plan.md`, `UPDATED_milestone_execution_status.md`, `UPDATED_brussels_validation_summary.md`, `known_issues.md`, and `operational_runbook.md`.
+This checkout is Brussels-first.
 
-The practical goal of the codebase is to load trajectory parquet data, clean it with reusable filters, assign vehicles to region-specific zones, generate pairwise interactions, score them with M-DRAC or IRSM variants, and write reviewable outputs under `results/` and `irsm/results/`.
+The maintained workflows are:
 
-## Environment Setup
+- Brussels lane M-DRAC
+- Brussels crosswalk M-DRAC
+- Brussels IRSM lane risk-vector generation
+- Brussels IRSM unsupervised scoring
+- Brussels IRSM supervised training and inference
+- Brussels Bhattacharyya envelope lane detection
+- review plots, GIFs, comparisons, and heatmaps
 
-Contributors are expected to create and use a conda environment that matches `environment.yaml` before running the codebase. The documented environment name is `flow_env`, and the repo assumes the packages listed there are available for the Brussels and IRSM workflows.
+Do not treat older plans or archived notes as active operating guidance. Use:
 
-## Current Project Direction
+- [README.md](README.md)
+- [irsm/README.md](irsm/README.md)
+- [next_steps/current_state.md](next_steps/current_state.md)
+- [next_steps/known_issues.md](next_steps/known_issues.md)
+- [next_steps/operational_runbook.md](next_steps/operational_runbook.md)
 
-The active plan is to stabilize and improve the Brussels pipeline first. The main themes documented in `next_steps/` are:
+## 2. Branching and Contribution Rules
 
-- Brussels lane and crosswalk validation as the source-of-truth workflow.
-- M-DRAC tuning and canonical output generation.
-- IRSM lane risk-vector generation, anomaly detection, and supervised ranking.
-- Comparison and evaluation tooling for shortlists and false-positive review.
+- do not commit directly to `main`
+- use a branch like `name/feature-short-description`
+- keep changes scoped
+- if runtime behavior changes, update docs in the same branch
+- if output schema changes, update checks and docs in the same branch
 
-## Planned Work
+Useful commit shapes:
 
-The planned work is intentionally staged:
+- `mdrac: tighten crosswalk filtering`
+- `irsm: refresh supervised metrics docs`
+- `docs: update Brussels runbook`
 
-- Keep Brussels lane and crosswalk runs reproducible and bounded.
-- Maintain canonical output schemas for downstream evaluation.
-- Continue IRSM development around risk-vector generation, anomaly scoring, supervised inference, and comparison reports.
-- Build alternate IRSM methods in the documented experimental folders only after the baseline Brussels path is stable.
+## 3. Environment Setup
 
-## Deprecated or Deferred Work
+This repository belongs to the conda environment `flow_env`.
 
-The following items are currently deprecated, deferred, or out of scope for the active Brussels-first phase:
-
-- Oulu pipelines are deferred while Brussels is stabilized.
-- SPF is experimental / disabled in the current configuration.
-- VLM validation is out of the current active scope.
-- Broad cross-region generalization is deferred until Brussels metrics improve.
-- Full-day unbounded Brussels lane runs are treated as a scaling problem, not the default operating mode, because the current validation flow uses bounded smoke windows.
-- IRSM supervised models are present, but the current docs warn that they must be used carefully and aligned with compatible training data.
-
-## Code Map
-
-### `filters/`
-
-This package holds the reusable filtering steps that clean raw trajectories before detection.
-
-- `filters/preprocessing/lifetime_filter.py`: removes short-lived objects that are unlikely to be meaningful interactions.
-- `filters/preprocessing/zone_assignment.py`: attaches spatial zones to object trajectories.
-- `filters/preprocessing/footpath_filter.py`: removes objects in pedestrian-only or false-detection footpath areas.
-- `filters/preprocessing/crosswalk_filter.py`: handles crosswalk orientation logic and removes vehicles moving parallel to crossings.
-- `filters/preprocessing/static_filter.py`: removes stationary or parked objects.
-- `filters/preprocessing/ghost_filter.py`: holds ghost/spawn-despawn artifact filtering logic.
-- `filters/preprocessing/overlap_filter.py`: filters overlapping pair artifacts.
-- `filters/preprocessing/__init__.py`: exports the preprocessing helpers used by the pipelines.
-- `filters/postprocessing/teleportation_filter.py`: removes unrealistic jumps after detection.
-- `filters/postprocessing/__init__.py`: package marker for postprocessing filters.
-- `filters/__init__.py`: package marker and high-level documentation only.
-
-### `utils/`
-
-This package provides shared infrastructure used by the Brussels and IRSM pipelines.
-
-- `utils/data_loader.py`: loads hourly parquet folders over a date range, with optional dtype coercion and smoke-run limits.
-- `utils/io_helpers.py`: defines the current M-DRAC result schema and saves or reloads detection CSV/XLSX files.
-- `utils/memory.py`: prints process and DataFrame memory usage for operational debugging.
-- `utils/paths.py`: centralizes repository, input-data, output-root, and config-path resolution.
-- `utils/irsm_preprocessing.py`: reuses the Brussels cleaning pipeline for IRSM lane risk-vector generation.
-- `utils/__init__.py`: re-exports the most commonly used helpers for scripts.
-
-### `config.yaml`
-
-This is the main runtime configuration for the Brussels pipeline and shared SSM helpers.
-
-- `data`: parquet dtype hints and batch-loading settings.
-- `preprocessing`: lifetime, footpath, crosswalk, static, ghost, and overlap filters.
-- `filters`: pair-generation thresholds such as distance, lateral distance, TTC, and closing speed.
-- `mdrac`: core M-DRAC thresholds, zone overrides, and severity settings.
-- `spf`: retained experimental configuration for the disabled SPF path.
-- `postprocessing`: teleportation and duration filters.
-- `processing`: runtime batch-size and threading settings.
-- `visualization`: plotting flags and output quality.
-- `vlm`: validation settings kept for the optional VLM workflow.
-- `output`: file format, metadata, and replay-link settings.
-
-### `irsm/irsm_config.yaml`
-
-This is the IRSM-specific configuration used by the Brussels lane risk-vector and anomaly-detection workflows.
-
-- `region` and `date`: default Brussels evaluation context.
-- `data`: input and output base paths for IRSM artifacts.
-- `preprocessing`: switches for IRSM preprocessing stages.
-- `zones`: current IRSM focus area, usually lanes.
-- `pair_generation`: distance, lateral, TTC, and closing-speed thresholds for IRSM pair creation.
-- `prt`: per-vehicle perception-reaction-time values.
-- `aggregation`: aggregation method and window settings for risk-vector construction.
-- `model`: feature columns and anomaly-model hyperparameters.
-- `output`: whether outputs are written per zone or as a single file.
-- `evaluation`: gold-label and canonical-output paths.
-- `thresholds`: optimized M-DRAC thresholds for lanes and crosswalks.
-- `feature_sets`: curated feature subsets for unsupervised and supervised models.
-- `ensemble`: weights for the unsupervised ensemble score.
-- `calibration`: probability calibration settings for supervised classifiers.
-
-### `irsm/`
-
-This package contains IRSM data generation, evaluation, canonicalization, model runners, and experimental alternatives.
-
-- `irsm/risk_vector.py`: extracts the feature vectors used by IRSM.
-- `irsm/data_generation.py`: generates Brussels IRSM lane risk vectors and writes `lanes.csv` outputs.
-- `irsm/canonical_utils.py`: converts detector outputs into the canonical schema used by evaluation.
-- `irsm/evaluator.py`: evaluates canonical predictions against `brussels_june_in.csv` and computes shortlist metrics.
-- `irsm/compare_mdrac_irsm.py`: compares Brussels M-DRAC detections with IRSM anomalies for the same day.
-- `irsm/supervised_detect.py`: runs supervised near-miss inference using saved models.
-- `irsm/tune_mdrac.py`: tuning entry point for M-DRAC parameter search.
-- `irsm/tune_unsupervised.py`: tuning entry point for unsupervised IRSM scorers.
-- `irsm/irsm_plotter.py`: generates IRSM visualizations and review plots.
-- `irsm/models/supervised.py`: defines supervised classifiers, training helpers, feature handling, and threshold logic.
-- `irsm/models/isolation_forest.py`: trains and applies Isolation Forest anomaly detection.
-- `irsm/models/gaussian_anomaly.py`: applies Gaussian anomaly detection.
-- `irsm/models/__init__.py`: model package marker.
-- `irsm/alternative_methods/meta_ensemble/meta_ensemble.py`: experimental ensemble ranking approach.
-- `irsm/alternative_methods/temporal_sequence/temporal_classifier.py`: experimental temporal sequence classifier.
-- `irsm/alternative_methods/surrogate_fusion/surrogate_fusion.py`: experimental surrogate-fusion pipeline.
-
-### `regions/brussels/`
-
-This folder contains the Brussels-specific operational pipelines and region geometry.
-
-- `regions/brussels/lane_main.py`: Brussels lane M-DRAC pipeline for vehicle-vehicle conflict detection.
-- `regions/brussels/crosswalk_main.py`: Brussels crosswalk M-DRAC pipeline for pedestrian-vehicle conflict detection.
-- `regions/brussels/zones.py`: lane, crosswalk, and footpath zone definitions for Brussels.
-- `regions/brussels/zone_plots/`: generated zone plots and visual references.
-- `regions/brussels/Brussels.png`: Brussels map / reference image used by the notebooks and analysis.
-
-## How The Main Pieces Fit Together
-
-The typical flow is:
-
-1. Load Brussels parquet data with `utils/data_loader.py`.
-2. Clean the trajectories with `filters/preprocessing/*`.
-3. Assign regions and zones from `regions/brussels/zones.py`.
-4. Generate nearby pairs and score them with the M-DRAC logic in `ssm/` and the Brussels entry points.
-5. Save results with `utils/io_helpers.py` and, for IRSM, canonicalize them with `irsm/canonical_utils.py`.
-6. Evaluate and compare outputs with `irsm/evaluator.py` and `irsm/compare_mdrac_irsm.py`.
-
-## How To Run The Main Executables
-
-All commands below assume you are at the repository root. The Brussels parquet data used for the active validation window is expected to live under the repository-local `data/` folder.  
-
-> [!CAUTION]  
-> The below commands and their arguments are chosen inorder to `fit` inside `16GB` memory of a normal Consumer Laptop System.  
-> The below commands assume that the execution system is [`Linux`](https://en.wikipedia.org/wiki/Linux) / [`MacOS`](https://en.wikipedia.org/wiki/MacOS).  
-> If any of the commands doesn't work/throw an error on other OS like [`Windows`](https://en.wikipedia.org/wiki/Microsoft_Windows),  
-> try to troubleshoot the command execution format.(typical examples include using `python3` or `py` instead of `python` and using “\\” instead of “/” in paths)
-
-<details>
-<summary><b>Brussels M-DRAC pipelines</b></summary>
-
-Run the Brussels lane pipeline:
+Create it once if needed:
 
 ```bash
-python regions/brussels/lane_main.py --start-date 2025-06-01 --start-time 00 --end-date 2025-06-01 --data-dir data --output-dir results/mdrac --max-hours 24
-
-python regions/brussels/lane_main.py --start-date 2025-06-02 --start-time 00 --end-date 2025-06-02 --data-dir data --output-dir results/mdrac --max-hours 24
-
-# for june 3, 1 hour hasn't been process to avoid OOM issues
-python regions/brussels/lane_main.py --start-date 2025-06-03 --start-time 01 --end-date 2025-06-03 --data-dir data --output-dir results/mdrac --max-hours 23
-
-python regions/brussels/lane_main.py --start-date 2025-06-04 --start-time 00 --end-date 2025-06-04 --data-dir data --output-dir results/mdrac --max-hours 24
-
-python regions/brussels/lane_main.py --start-date 2025-06-05 --start-time 00 --end-date 2025-06-05 --data-dir data --output-dir results/mdrac --max-hours 24
-
-python regions/brussels/lane_main.py --start-date 2025-06-06 --start-time 00 --end-date 2025-06-06 --data-dir data --output-dir results/mdrac --max-hours 24
-
-python regions/brussels/lane_main.py --start-date 2025-06-07 --start-time 00 --end-date 2025-06-07 --data-dir data --output-dir results/mdrac --max-hours 24
+conda env create -f environment.yaml
 ```
 
-Run the Brussels crosswalk pipeline:
+Activate it for interactive work:
 
 ```bash
-python regions/brussels/crosswalk_main.py --start-date 2025-06-01 --start-time 00 --end-date 2025-06-01 --data-dir data --output-dir results/mdrac --max-hours 24
-
-python regions/brussels/crosswalk_main.py --start-date 2025-06-02 --start-time 00 --end-date 2025-06-02 --data-dir data --output-dir results/mdrac --max-hours 24
-
-# for june 3, 1 hour hasn't been process to avoid OOM issues
-python regions/brussels/crosswalk_main.py --start-date 2025-06-03 --start-time 01 --end-date 2025-06-03 --data-dir data --output-dir results/mdrac --max-hours 23
-
-python regions/brussels/crosswalk_main.py --start-date 2025-06-04 --start-time 00 --end-date 2025-06-04 --data-dir data --output-dir results/mdrac --max-hours 24
-
-python regions/brussels/crosswalk_main.py --start-date 2025-06-05 --start-time 00 --end-date 2025-06-05 --data-dir data --output-dir results/mdrac --max-hours 24
-
-python regions/brussels/crosswalk_main.py --start-date 2025-06-06 --start-time 00 --end-date 2025-06-06 --data-dir data --output-dir results/mdrac --max-hours 24
-
-python regions/brussels/crosswalk_main.py --start-date 2025-06-07 --start-time 00 --end-date 2025-06-07 --data-dir data --output-dir results/mdrac --max-hours 24
+conda activate flow_env
 ```
 
-Run both Brussels pipelines over a bounded smoke window:
+Or run commands without activating:
 
 ```bash
-python checks/run_brussels_smoke_window.py --start-date 2025-06-01 --end-date 2025-06-01 --max-hours 24
+conda run -n flow_env python checks/active_pipeline_checks.py
 ```
 
-Plot the results using:
+If you prefer wrappers for common commands, use the repository `Justfile`:
 
 ```bash
-# manually edit the plotter.py to change the date and region for plotting
-python plotter.py
+just --list
 ```
 
-Summarize the active Brussels validation artifacts from both M-DRAC pipelines and the IRSM lane pipeline:
+Optional path overrides:
 
 ```bash
-python checks/summarize_active_results.py
-# ./next_steps/UPDATED_brussels_validation_summary.md will be updated.
+export FLOW_ANALYTICS_DATA_BRUSSELS=/path/to/brussels/parquet/root
+export FLOW_ANALYTICS_OUTPUT_ROOT=/path/to/output/root
 ```
 
-Run the active pipeline sanity checks:
+If `FLOW_ANALYTICS_DATA_BRUSSELS` is unset, Brussels scripts use the repository-local `data/` folder when it exists.
+
+## 4. Code Map
+
+### Active execution entry points
+
+- `regions/brussels/lane_main.py`
+- `regions/brussels/crosswalk_main.py`
+- `irsm/data_generation.py`
+- `irsm/models/isolation_forest.py`
+- `irsm/models/gaussian_anomaly.py`
+- `irsm/models/supervised.py`
+- `irsm/supervised_detect.py`
+- `bhattacharyya/detect.py`
+- `irsm/compare_mdrac_irsm.py`
+- `checks/active_pipeline_checks.py`
+- `checks/run_brussels_smoke_window.py`
+- `checks/summarize_active_results.py`
+
+### Core implementation
+
+- `ssm/m_drac.py`: near-miss detector
+- `ssm/utils.py`: pair generation and shared safety utilities
+- `filters/preprocessing/`: trajectory cleaning filters
+- `utils/data_loader.py`: hourly parquet loader
+- `utils/io_helpers.py`: output schema and result I/O
+- `utils/paths.py`: path resolution and environment overrides
+- `irsm/risk_vector.py`: IRSM feature extraction
+- `bhattacharyya/envelope.py`: Bhattacharyya safety-envelope overlap math
+
+## 5. Contribution Workflow
+
+Recommended sequence for any non-trivial change:
+
+1. read the current docs
+2. run the lightweight checks
+3. reproduce the relevant bounded workflow
+4. make the change
+5. rerun the checks
+6. rerun the relevant bounded workflow
+7. update docs if behavior changed
+
+## 6. Commands: What To Run and Why
+
+All commands below assume you are at the repository root.
+
+### 6.1 Validate imports and active contracts
+
+Run this first after environment setup or before opening a PR:
 
 ```bash
-python checks/active_pipeline_checks.py
+conda run -n flow_env python checks/active_pipeline_checks.py
 ```
-</details>
 
----
+What it does:
 
-<details>
-<summary><b>IRSM generation and detection</b></summary>
+- validates core config loading
+- validates result schema round-tripping
+- checks synthetic M-DRAC behavior
+- checks active pair-generation assumptions
 
-Generate IRSM lane risk vectors(_data generation truncated for few hours to avoid OOM issues_):
+### 6.2 Brussels lane M-DRAC
+
+Use this for vehicle-vehicle lane near-miss detection.
+
+Single bounded day:
 
 ```bash
-python irsm/data_generation.py --date 2025-06-01 --start-time 00 --max-hours 24
-
-python irsm/data_generation.py --date 2025-06-02 --start-time 03 --max-hours 17
-
-python irsm/data_generation.py --date 2025-06-03 --start-time 04 --max-hours 16
-
-python irsm/data_generation.py --date 2025-06-04 --start-time 03 --max-hours 18
-
-python irsm/data_generation.py --date 2025-06-05 --start-time 03 --max-hours 18
-
-python irsm/data_generation.py --date 2025-06-06 --start-time 03 --max-hours 18
-
-python irsm/data_generation.py --date 2025-06-07 --start-time 02 --max-hours 20
-
+conda run -n flow_env python regions/brussels/lane_main.py \
+  --start-date 2025-06-01 \
+  --end-date 2025-06-01 \
+  --start-time 00 \
+  --max-hours 22
 ```
 
-Run Isolation Forest anomaly detection:
+What it does:
+
+- loads Brussels parquet data for the requested window
+- applies lifetime, footpath, crosswalk-parallel, and static filters
+- assigns lane zones
+- generates nearby same-lane candidate pairs
+- runs M-DRAC detection
+- saves a conflict CSV
+
+Output:
+
+```text
+results/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv
+```
+
+Important notes:
+
+- use explicit `--start-date`, `--end-date`, and `--start-time`
+- prefer `--max-hours 22` for reproducibility on a normal workstation
+- full-day large-window lane processing is still memory-heavy
+
+### 6.3 Brussels crosswalk M-DRAC
+
+Use this for pedestrian-vehicle crosswalk detection.
+
+Single bounded day:
 
 ```bash
-python irsm/models/isolation_forest.py
-# edit irsm/irsm_config.yaml to change the model hyperparameters like Date & etc.
+conda run -n flow_env python regions/brussels/crosswalk_main.py \
+  --start-date 2025-06-01 \
+  --end-date 2025-06-01 \
+  --start-time 00 \
+  --max-hours 22
 ```
 
-Run Gaussian anomaly detection if you are using that path:
+What it does:
+
+- loads Brussels parquet data
+- applies the shared preprocessing stack
+- assigns crosswalk zones
+- filters parallel vehicles
+- generates crosswalk candidate pairs
+- applies pedestrian-vs-vehicle label logic
+- runs crosswalk-tuned M-DRAC
+
+Output:
+
+```text
+results/mdrac/brussels/crosswalks/2025-06-01/mdrac_2025-06-01.csv
+```
+
+### 6.4 Multi-day bounded Brussels smoke window
+
+Use this when you want the current stable multi-day reproduction pattern.
 
 ```bash
-python irsm/models/gaussian_anomaly.py
-# edit irsm/irsm_config.yaml to change the model hyperparameters like Date & etc.
+conda run -n flow_env python checks/run_brussels_smoke_window.py \
+  --start-date 2025-06-01 \
+  --end-date 2025-06-07 \
+  --max-hours 22
 ```
 
-Run supervised IRSM detection:
+What it does:
+
+- runs the lane and crosswalk pipelines day by day
+- keeps the runs bounded
+- writes outputs under `results/mdrac/brussels/`
+
+### 6.5 Summarize active results
+
+Use this after smoke runs or artifact refreshes.
 
 ```bash
-python irsm/supervised_detect.py
-# edit irsm/irsm_config.yaml to change the model hyperparameters like Date & etc.
+conda run -n flow_env python checks/summarize_active_results.py
 ```
 
-Plots and visualizations for IRSM can be generated using:
+What it does:
+
+- scans the current bounded outputs
+- rebuilds the active markdown summary
+
+Output:
+
+```text
+next_steps/UPDATED_brussels_validation_summary.md
+```
+
+### 6.6 IRSM lane risk-vector generation
+
+Generate the lane interaction feature table for a date:
 
 ```bash
-python irsm/irsm_plotter.py
-python irsm/visualize_risk.py
-# edit irsm/irsm_config.yaml to change the Date & etc.
+conda run -n flow_env python irsm/data_generation.py \
+  --date 2025-06-01 \
+  --start-time 00 \
+  --max-hours 22
 ```
 
-Compare M-DRAC and IRSM outputs for a day:
+What it does:
+
+- reuses the Brussels preprocessing chain
+- assigns lane zones
+- generates nearby same-lane pairs
+- extracts one risk vector per pair at the peak averaged M-DRAC moment
+
+Output:
+
+```text
+irsm/data/brussels/2025-06-01/lanes.csv
+```
+
+### 6.7 IRSM Isolation Forest
 
 ```bash
-python irsm/compare_mdrac_irsm.py --date 2025-06-01
-python irsm/compare_mdrac_irsm.py --date 2025-06-02
-python irsm/compare_mdrac_irsm.py --date 2025-06-03
-python irsm/compare_mdrac_irsm.py --date 2025-06-04
-python irsm/compare_mdrac_irsm.py --date 2025-06-05
-python irsm/compare_mdrac_irsm.py --date 2025-06-06
-python irsm/compare_mdrac_irsm.py --date 2025-06-07
+conda run -n flow_env python irsm/models/isolation_forest.py
 ```
-</details>
 
-Oulu shell wrappers exist in the repository, but they are currently deferred in the active plan.
+What it does:
 
-## Notes For Contributing
+- loads the configured `lanes.csv`
+- selects the configured feature set
+- trains Isolation Forest
+- scores all pairs
+- keeps anomaly rows
+- deduplicates repeated anomaly rows by `pair_id`
 
-- Keep changes aligned with the Brussels-first direction documented in `next_steps/`.
-- Prefer updating shared helpers in `filters/` and `utils/` over duplicating logic in entry-point scripts.
-- Preserve canonical result schemas when adding new detectors or evaluation paths.
-- If you add a new executable entry point, document it in this file under “How To Run The Main Executables.”
+Output:
+
+```text
+irsm/results/brussels/2025-06-01/lanes_detections.csv
+```
+
+### 6.8 IRSM Gaussian anomaly
+
+```bash
+conda run -n flow_env python irsm/models/gaussian_anomaly.py
+```
+
+What it does:
+
+- loads the same IRSM lane vectors
+- fits a stabilized multivariate Gaussian model
+- saves score tables and distribution plots
+
+Typical outputs:
+
+```text
+irsm/results/brussels/2025-06-01/gaussian_results.csv
+irsm/results/brussels/2025-06-01/gaussian_detections.csv
+irsm/results/brussels/2025-06-01/gaussian_distributions.png
+```
+
+### 6.9 IRSM supervised training
+
+```bash
+conda run -n flow_env python irsm/models/supervised.py --train
+```
+
+What it does:
+
+- aligns Brussels labels from `brussels_june_in.csv`
+- builds train / val / test splits
+- trains Random Forest, XGBoost, and Neural Network models
+- saves model artifacts and metrics
+
+Important note:
+
+- this is the training command
+- it is heavier than the M-DRAC smoke checks
+- use it when working on supervised IRSM, not as a first smoke test
+
+### 6.10 IRSM supervised inference
+
+```bash
+conda run -n flow_env python irsm/supervised_detect.py
+```
+
+What it does:
+
+- loads the configured day’s `lanes.csv`
+- loads saved supervised models
+- writes one output CSV per model
+
+Important note:
+
+- this script still uses module-level configuration instead of CLI flags
+- inspect the file before running it for a different date or batch scenario
+
+### 6.11 Compare M-DRAC and IRSM
+
+```bash
+conda run -n flow_env python irsm/compare_mdrac_irsm.py --date 2025-06-01
+```
+
+Use this to compare lane M-DRAC outputs against IRSM anomaly outputs for a specific Brussels day.
+
+### 6.12 Evaluator
+
+```bash
+conda run -n flow_env python irsm/evaluator.py \
+  --start-date 2025-06-01 \
+  --end-date 2025-06-07 \
+  --gold-path brussels_june_in.csv
+```
+
+Important caveat:
+
+- canonical output generation is currently incomplete because `irsm/canonical_utils.py` does not write files to disk
+
+### 6.13 Bhattacharyya envelope detection
+
+Use this for Brussels lane near-miss detection based on Gaussian safety-envelope overlap.
+
+```bash
+conda run -n flow_env python bhattacharyya/detect.py \
+  --date 2025-06-01 \
+  --max-hours 22
+```
+
+What it does:
+
+- loads Brussels parquet data
+- applies the shared preprocessing chain
+- generates nearby pairs
+- computes future-horizon Bhattacharyya envelope overlap
+- applies post-filters and temporal deduplication
+- writes detections and a YAML summary
+
+Outputs:
+
+```text
+results/bhattacharyya/brussels/lanes/2025-06-01/detections.csv
+results/bhattacharyya/brussels/lanes/2025-06-01/summary.yaml
+```
+
+### 6.14 Visual review tools
+
+Plot zones:
+
+```bash
+conda run -n flow_env python helpers/plot_zones.py --region brussels
+```
+
+Generate M-DRAC plots:
+
+```bash
+conda run -n flow_env python plotter.py
+```
+
+Generate IRSM plots:
+
+```bash
+conda run -n flow_env python irsm/irsm_plotter.py
+```
+
+Generate Brussels heatmaps:
+
+```bash
+conda run -n flow_env python helpers/heatmaps.py
+```
+
+Generate object animation GIFs:
+
+```bash
+conda run -n flow_env python helpers/animator.py 11791470 --data-dir data --out-dir animations
+```
+
+## 7. Current Operational Guidance
+
+- use `flow_env`
+- pass explicit dates
+- prefer bounded windows unless working on scaling
+- record the exact command when reporting counts or metrics
+- do not assume a historical report is current just because it exists in the repository
+
+## 8. What To Update When You Change Behavior
+
+If you change behavior, update the relevant docs:
+
+- `README.md`
+- `irsm/README.md`
+- `next_steps/current_state.md`
+- `next_steps/known_issues.md`
+- `next_steps/operational_runbook.md`
+- `next_steps/UPDATED_brussels_validation_summary.md` if artifacts changed
+
+## 9. Pre-PR Checklist
+
+- `conda run -n flow_env python checks/active_pipeline_checks.py`
+- rerun the specific workflow you changed
+- confirm output paths still match the docs
+- update docs if anything user-visible changed
+- note limitations instead of hiding them

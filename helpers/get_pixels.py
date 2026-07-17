@@ -8,15 +8,18 @@ and prints a ready-to-paste NumPy array for homography setup.
 Usage: 
     # install OpenCV and matplotlib since the current environment `flow_env` DONOT have them
     pip install opencv-python, matplotlib
-    python get_pixels.py
+    python helpers/get_pixels.py
 
 """
 
 import cv2
 import matplotlib.pyplot as plt
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Load the Brussels imagery
-img = cv2.imread('regions/brussels/Brussels.png')
+img = cv2.imread(str(REPO_ROOT / 'regions' / 'brussels' / 'Brussels.png'))
 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 fig, ax = plt.subplots(figsize=(12, 12))

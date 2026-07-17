@@ -1,213 +1,211 @@
 # Operational Runbook
 
-This runbook describes the intended operations after the stabilization blockers are fixed. Some commands below will not work in the current checkout until [known_issues.md](known_issues.md) is addressed.
+Last updated on: 2026-07-17
 
-## Environment Setup
+This runbook is the practical reference for reproducing the active Brussels workflows in the current checkout.
 
-Intended setup:
+## 1. Environment
+
+Create and activate the repository environment:
 
 ```bash
 conda env create -f environment.yaml
 conda activate flow_env
 ```
 
-Current local note from review:
-
-- `flow_env` is not present on this machine.
-- Active `base` does not include core dependencies such as `numpy` and `psutil`.
-
-## Recommended Path Variables
-
-The code currently hardcodes `/home/ubuntu/...` paths. Replace that with env/config-driven paths. Recommended variables:
+Optional overrides:
 
 ```bash
-export FLOW_ANALYTICS_ROOT=/home/kaushik/Kezual/Flow_analytics
-export FLOW_ANALYTICS_DATA_BRUSSELS=/path/to/brussels/objects/clean
-export FLOW_ANALYTICS_DATA_OULU=/path/to/oulu/objects/clean/objects/clean
-export FLOW_ANALYTICS_OUTPUT_ROOT=/home/kaushik/Kezual/Flow_analytics/results
+export FLOW_ANALYTICS_DATA_BRUSSELS=/path/to/brussels/parquet/root
+export FLOW_ANALYTICS_OUTPUT_ROOT=/path/to/output/root
 ```
 
-## Brussels Lane M-DRAC
+If `FLOW_ANALYTICS_DATA_BRUSSELS` is unset, the scripts will use the repository-local `data/` folder when it exists.
 
-Purpose: vehicle-vehicle conflicts in Brussels lane zones.
+## 2. Validate The Environment
 
-Intended command:
+Run the lightweight checks first:
+
+```bash
+python checks/active_pipeline_checks.py
+```
+
+## 3. Run Brussels M-DRAC
+
+### Lane pipeline
 
 ```bash
 python regions/brussels/lane_main.py \
-  --start-date 2025-06-03 \
-  --end-date 2025-06-03
+  --start-date 2025-06-01 \
+  --end-date 2025-06-01 \
+  --start-time 00 \
+  --max-hours 22
 ```
 
-Expected output:
+Output:
 
 ```text
-results/brussels/lanes/2025-06-03/mdrac_2025-06-03.csv
+results/mdrac/brussels/lanes/2025-06-01/mdrac_2025-06-01.csv
 ```
 
-Current result example exists with 4 detections.
-
-## Brussels Crosswalk M-DRAC
-
-Purpose: pedestrian/cyclist/vehicle conflicts in Brussels crosswalk zones.
-
-Intended command:
+### Crosswalk pipeline
 
 ```bash
 python regions/brussels/crosswalk_main.py \
-  --start-date 2025-06-03 \
-  --end-date 2025-06-03
+  --start-date 2025-06-01 \
+  --end-date 2025-06-01 \
+  --start-time 00 \
+  --max-hours 22
 ```
 
-Expected output:
+Output:
 
 ```text
-results/brussels/crosswalks/2025-06-03/mdrac_2025-06-03.csv
+results/mdrac/brussels/crosswalks/2025-06-01/mdrac_2025-06-01.csv
 ```
 
-Current result example exists with 3 detections. This script is the cleanest current crosswalk implementation because it uses `skip_label_filter=True`.
-
-## Oulu Lane M-DRAC
-
-Purpose: vehicle-vehicle conflicts in Oulu lane zones.
-
-Intended command after fixing defaults/paths:
+### Multi-day bounded window
 
 ```bash
-python regions/oulu/lane_main.py \
-  --start-date 2025-09-04 \
-  --end-date 2025-09-04
+python checks/run_brussels_smoke_window.py \
+  --start-date 2025-06-01 \
+  --end-date 2025-06-07 \
+  --max-hours 22
 ```
 
-Expected output:
+## 4. Run Brussels IRSM
+
+### Generate lane risk vectors
+
+```bash
+python irsm/data_generation.py \
+  --date 2025-06-01 \
+  --start-time 00 \
+  --max-hours 22
+```
+
+Output:
 
 ```text
-results/oulu/lanes/2025-09-04/mdrac_2025-09-04.csv
+irsm/data/brussels/2025-06-01/lanes.csv
 ```
 
-Caution: the current script default spans multiple dates and saves under the start date. Always pass explicit same-day start/end until that is fixed.
-
-## Oulu Crosswalk M-DRAC
-
-Purpose: pedestrian/cyclist/vehicle conflicts in the Oulu crosswalk zone.
-
-Do not run the current file as production code before cleanup. It contains duplicated execution blocks and old label-spoofing logic.
-
-After cleanup, intended command:
+### Isolation Forest
 
 ```bash
-python regions/oulu/crosswalk_main.py \
-  --start-date 2025-09-04 \
-  --end-date 2025-09-04
+python irsm/models/isolation_forest.py
 ```
 
-Expected output:
+Output:
 
 ```text
-results/oulu/crosswalks/2025-09-04/mdrac_2025-09-04.csv
+irsm/results/brussels/2025-06-01/lanes_detections.csv
 ```
 
-## Batch Scripts
-
-Existing batch scripts:
+### Gaussian anomaly model
 
 ```bash
-./brussels_lanes.sh
-./brussels_crosswalks.sh
-./oulu_lanes.sh
-./oulu_crosswalks.sh
+python irsm/models/gaussian_anomaly.py
 ```
 
-Notes:
+Typical outputs:
 
-- They assume conda `flow_env`.
-- They assume `/home/ubuntu/...` data paths in the Python scripts.
-- Oulu batch scripts prompt before running.
-- Use only after one-day smoke runs pass.
+```text
+irsm/results/brussels/2025-06-01/gaussian_results.csv
+irsm/results/brussels/2025-06-01/gaussian_detections.csv
+irsm/results/brussels/2025-06-01/gaussian_distributions.png
+```
 
-## Plot Zones
-
-Plot configured region zones:
+### Supervised training and inference
 
 ```bash
-python plot_zones.py --region brussels
-python plot_zones.py --region oulu
+python irsm/models/supervised.py --train
+python irsm/supervised_detect.py
+```
+
+Note: `irsm/supervised_detect.py` reads its date and output paths from module-level configuration. Check the file before batch use.
+
+## 5. Run Brussels Bhattacharyya
+
+```bash
+python bhattacharyya/detect.py \
+  --date 2025-06-01 \
+  --max-hours 22
 ```
 
 Outputs:
 
 ```text
-regions/brussels/zone_plots/all_zones.png
-regions/oulu/zone_plots/all_zones.png
+results/bhattacharyya/brussels/lanes/2025-06-01/detections.csv
+results/bhattacharyya/brussels/lanes/2025-06-01/summary.yaml
 ```
 
-Only the Oulu plot exists in the current repository.
+## 6. Evaluation and Comparison
 
-## Plot Detected Pair Trajectories
-
-Using root plotter:
-
-```python
-from plotter import load_data, plot_all_pairs_from_csv
-
-df = load_data("/path/to/brussels/objects/clean", "2025-06-03", "2025-06-03")
-plot_all_pairs_from_csv(
-    csv_path="results/brussels/lanes/2025-06-03/mdrac_2025-06-03.csv",
-    data_df=df,
-    show_plots=False,
-)
-```
-
-## VLM Validation
-
-Intended command:
+Compare M-DRAC and IRSM on a day:
 
 ```bash
-python vlm/validate.py
+python irsm/compare_mdrac_irsm.py --date 2025-06-01
 ```
 
-Current blockers:
-
-- `vlm/batch_validator.py` references undefined `save_interval`.
-- `vlm/vlm_backend.py` has a package import issue.
-- Gemini requires `GEMINI_API_KEY` or local Qwen dependencies/model.
-
-After fixes, start with a dry-run mode that only generates combined plots and parses a fake response.
-
-## IRSM
-
-Intended future flow:
+Run the Brussels evaluator:
 
 ```bash
-python irsm/data_generation.py
-python irsm/models/isolation_forest.py
-python irsm/models/gaussian_anomaly.py
+python irsm/evaluator.py \
+  --start-date 2025-06-01 \
+  --end-date 2025-06-07 \
+  --gold-path brussels_june_in.csv
 ```
 
-Current blocker:
+Important caveat: canonical output generation is currently incomplete because `irsm/canonical_utils.py` does not write files.
 
-- `irsm/data_generation.py` is absent, so the first command cannot run.
+## 7. Visualization
 
-The first operational IRSM task is restoring data generation to produce:
+Plot Brussels zones:
+
+```bash
+python helpers/plot_zones.py --region brussels
+```
+
+Generate M-DRAC pair plots:
+
+```bash
+python plotter.py
+```
+
+Generate IRSM pair plots:
+
+```bash
+python irsm/irsm_plotter.py
+```
+
+Generate Brussels heatmaps:
+
+```bash
+python helpers/heatmaps.py
+```
+
+Generate object animations:
+
+```bash
+python helpers/animator.py 11791470 --data-dir data --out-dir animations
+```
+
+## 8. Refresh The Current Summary
+
+```bash
+python checks/summarize_active_results.py
+```
+
+This rebuilds:
 
 ```text
-irsm/data/{region}/{date}/lanes.csv
+next_steps/UPDATED_brussels_validation_summary.md
 ```
 
-Then Isolation Forest should write:
+## 9. Operating Guidance
 
-```text
-irsm/results/{region}/{date}/lanes_detections.csv
-```
-
-## Quick Health Checks
-
-After environment and import fixes:
-
-```bash
-python -c "import utils; import ssm.utils; from ssm.m_drac import ModifiedDRAC; print('imports ok')"
-python -c "from regions.brussels.zones import get_lane_zones; print(len(get_lane_zones()))"
-python -c "from regions.oulu.zones import get_lane_zones; print(len(get_lane_zones()))"
-python -c "from vlm.utils import parse_validation_response; print(parse_validation_response('Classification: confirmed_near_miss\nConfidence: 80\nReasoning: ok'))"
-```
-
+- always pass explicit dates
+- prefer bounded windows unless you are actively working on scaling
+- record the command, date window, and config used for any reported metric
+- do not assume old archive docs reflect the current code surface

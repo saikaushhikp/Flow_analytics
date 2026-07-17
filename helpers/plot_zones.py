@@ -4,13 +4,13 @@ Zone Visualization Tool - Proper map-like view
 Plots all zones with correct aspect ratio and proportions.
 
 Usage:
-    python plot_zones.py --region brussels
+    python helpers/plot_zones.py --region brussels
 """
 
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -30,15 +30,6 @@ def load_zones_by_category(region):
             'Lanes': get_lane_zones(),
             'Footpaths': get_footpath_zones(),
             'Crosswalks': get_crosswalk_zones()
-        }
-    elif region == 'oulu':      # to be noted that the oulu region hs been deprecated as the scope of this project is now limited to brussels only. However, the code is still kept for reference and future use.
-        from regions.oulu.zones import get_crosswalk_zone, get_footpath_zones, get_lane_zones, get_near_miss_zones
-        
-        categories = {
-            'Crosswalk': [get_crosswalk_zone()],
-            'Footpaths': get_footpath_zones(),
-            'Lanes': get_lane_zones(),
-            'Near-Miss Zones': get_near_miss_zones()
         }
     else:
         raise ValueError(f"Unknown region: {region}")
@@ -156,7 +147,7 @@ def plot_all_zones(region='brussels'):
     plt.tight_layout()
     
     # Save with reasonable DPI
-    output_dir = Path(f'regions/{region}/zone_plots')
+    output_dir = REPO_ROOT / 'regions' / region / 'zone_plots'
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / 'all_zones.png'
     
@@ -177,7 +168,7 @@ def plot_all_zones(region='brussels'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Plot all zones with proper aspect ratio')
     parser.add_argument('--region', type=str, default='brussels',
-                       choices=['brussels', 'oulu'],
+                       choices=['brussels',],
                        help='Region to plot (default: brussels)')
     
     args = parser.parse_args()

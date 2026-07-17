@@ -6,13 +6,13 @@ over time. Each object is color-coded, and a legend is placed in the top-right.
 
 Example usage:
     # Single object
-    python3 animator.py 11791470 --data-dir data --out-dir animations
+    python3 helpers/animator.py 11791470 --data-dir data --out-dir animations
 
     # Multiple objects in a single combined GIF
-    python3 animator.py 11791470 12345678 --data-dir data --out-dir animations
+    python3 helpers/animator.py 11791470 12345678 --data-dir data --out-dir animations
 
     # With max animation duration of 30 seconds
-    python3 animator.py 11791470 --max-time 30 --data-dir data --out-dir animations
+    python3 helpers/animator.py 11791470 --max-time 30 --data-dir data --out-dir animations
 
 Dependencies: matplotlib, pandas, pyarrow, pillow
 """
@@ -22,6 +22,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from typing import List, Sequence, Tuple, Union
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as manimation
@@ -34,8 +39,8 @@ except Exception:
     pq = None
 
 
-DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
-DEFAULT_OUT_DIR = Path(__file__).resolve().parent / "animations"
+DEFAULT_DATA_DIR = REPO_ROOT / "data"
+DEFAULT_OUT_DIR = REPO_ROOT / "animations"
 DEFAULT_FPS = 10
 DEFAULT_TRAIL_SECONDS = 5
 DEFAULT_DPI = 100
@@ -316,13 +321,13 @@ def parse_args() -> argparse.Namespace:
         epilog="""
 Examples:
   # Single object
-  python3 animator.py 11791470 --data-dir data --out-dir animations
+  python3 helpers/animator.py 11791470 --data-dir data --out-dir animations
   
   # Multiple objects in combined GIF
-  python3 animator.py 11791470 12345678 --data-dir data --out-dir animations
+  python3 helpers/animator.py 11791470 12345678 --data-dir data --out-dir animations
   
   # With 30-second max duration
-  python3 animator.py 11791470 --max-time 30 --data-dir data --out-dir animations
+  python3 helpers/animator.py 11791470 --max-time 30 --data-dir data --out-dir animations
         """,
     )
     

@@ -1,26 +1,46 @@
-# M-DRAC Parameter Optimization Tuning Report
+# M-DRAC Tuning Report
 
-Based on parameter grid search on the gold Brussels dataset (`brussels_june_in.csv`) over the first 24 hours.
+Last updated on: 2026-07-17
 
-## 1. Lanes Parameters (Vehicle-Vehicle longitudinal conflicts)
-- **Best Precision@10**: 0.000
-- **Best Recall@10**: 0.000
-- **Optimized Parameters**:
-  - `min_mdrac`: 3.4
-  - `max_ttc`: 1.0
-  - `min_speed_diff`: 0.5
-  - `max_lateral_distance`: 1.2
-  - `closing_accel_threshold`: -0.3
-  - `min_avg_frames`: 3
-  - `avg_window`: 1.0 (fixed)
+This file summarizes the current M-DRAC tuning posture for the Brussels-first workflow.
 
-## 2. Crosswalks Parameters (Pedestrian-Vehicle crosswalk interactions)
-- **Best Precision@10**: 0.100
-- **Best Recall@10**: 0.500
-- **Optimized Parameters**:
-  - `min_mdrac`: 3.4
-  - `max_ttc`: 0.8
-  - `min_speed_diff`: 0.5
-  - `yaw_diff_rate_threshold`: 10.0
-  - `avg_window`: 0.3
-  - `min_avg_frames`: 1
+## Scope
+
+- region: Brussels
+- active surfaces: lanes and crosswalks
+- reference benchmark: `brussels_june_in.csv`
+- practical objective: improve top-k near-miss shortlist quality while keeping detections explainable and reviewable
+
+## Current Status
+
+The repository does not currently carry one final “best tuned” M-DRAC parameter sheet beyond:
+
+- the active runtime settings in `config.yaml`
+- the detector logic in `ssm/m_drac.py`
+- the bounded validation outputs under `results/mdrac/brussels/`
+
+What has already improved relative to earlier baselines:
+
+- separate lane and crosswalk handling
+- crosswalk-specific averaging behavior
+- follower-response logic strengthened with direct braking-response evidence
+- stable bounded execution for Brussels smoke validation
+
+## Where Tuning Lives
+
+- `config.yaml`
+- `ssm/m_drac.py`
+- `ssm/utils.py`
+- `irsm/tune_mdrac.py`
+
+## Recommended Tuning Workflow
+
+1. run bounded Brussels smoke windows
+2. compare detection counts and top-ranked conflicts
+3. inspect replay links for false-positive patterns
+4. change one parameter group at a time
+5. regenerate `next_steps/UPDATED_brussels_validation_summary.md`
+
+## Current Limitation
+
+Lane tuning across large windows remains memory-sensitive. Use bounded windows unless you are explicitly working on scaling or orchestration.

@@ -1,17 +1,36 @@
 # Meta-Ensemble Ranker
 
-This alternative method implements a **Meta-Ensemble Ranker** that aggregates inputs from multiple underlying models to produce one final consolidated near-miss confidence score.
+Last updated on: 2026-07-17
+
+This experiment stacks multiple detector outputs into one final ranking score.
 
 ## Inputs
-- **M-DRAC Composite Score**: Calculated dynamically as `mdrac * (1.0 / (ttc + 0.1))`
-- **Isolation Forest Score**: Z-normalized anomaly score (unsupervised)
-- **Gaussian Anomaly Score**: Z-normalized log-probability (unsupervised, Ledoit-Wolf)
-- **Random Forest Probability**: Calibrated prediction probability (supervised)
-- **XGBoost Probability**: Calibrated prediction probability (supervised)
 
-## Model
-The meta-ensemble uses a **Logistic Regression** model trained on the gold-standard labeled data points (excluding the weak self-trained labels to prevent prediction bias).
+- composite M-DRAC severity
+- Isolation Forest anomaly score
+- Gaussian anomaly score
+- Random Forest probability
+- XGBoost probability
 
-## Structure
-- `meta_ensemble.py`: Script to generate features, fit the logistic regression model, evaluate predictions, and save metrics.
-- `results/`: Contains the saved models, scaler, and evaluated performance metrics.
+The current implementation trains a logistic-regression ranker on gold-labeled Brussels pairs.
+
+## Run
+
+```bash
+python irsm/alternative_methods/meta_ensemble/meta_ensemble.py
+```
+
+## Current Result
+
+From `results/evaluation_metrics.json`:
+
+- validation AUC: `0.739`
+- validation Precision@10: `0.100`
+- test AUC: `0.571`
+- test Precision@10: `0.100`
+
+## Interpretation
+
+This method is useful as a fusion baseline, but it is not currently strong enough to replace the main Random Forest supervised path.
+
+The learned coefficients suggest the supervised probabilities carry most of the signal, especially XGBoost and Random Forest, while the unsupervised scores contribute less cleanly.

@@ -31,6 +31,10 @@ except ImportError:
 # Allows small overlaps due to measurement uncertainty
 OVERLAP_BUFFER = 0.5
 
+# VRU pairs are often true interactions rather than bad tracks, even when
+# their 2D footprints overlap with vehicles in the projected frame.
+VRU_LABELS = {1, 5}
+
 # Enable detailed statistics output
 VERBOSE = True
 
@@ -105,6 +109,16 @@ if NUMBA_AVAILABLE:
         return result
 
 
+def _rows_to_preserve_for_vru(pairs: pd.DataFrame) -> np.ndarray:
+    """Keep VRU-involved pairs even if their footprints overlap."""
+    if 'label1' not in pairs.columns or 'label2' not in pairs.columns:
+        return np.zeros(len(pairs), dtype=bool)
+
+    label1 = pairs['label1'].to_numpy()
+    label2 = pairs['label2'].to_numpy()
+    return np.isin(label1, tuple(VRU_LABELS)) | np.isin(label2, tuple(VRU_LABELS))
+
+
 # ============================================================================
 # MAIN FILTER FUNCTION
 # ============================================================================
@@ -165,17 +179,50 @@ def filter_overlapping_pairs(
     # Check for overlaps
     if verbose:
         print("  Checking for overlaps (SAT method)...")
+
+    preserve_mask = _rows_to_preserve_for_vru(pairs)
+    candidate_mask = ~preserve_mask
+    overlap_mask = np.zeros(len(pairs), dtype=bool)
+
+    preserved_count = int(preserve_mask.sum())
+    candidate_count = int(candidate_mask.sum())
+
+    if verbose and preserved_count > 0:
+        print(f"  Preserving {preserved_count:,} VRU-involved pairs from overlap filtering")
+
+    if candidate_count == 0:
+        if verbose:
+            print("  All pairs preserved by VRU-aware filtering")
+            print(f"\n  Overlapping pairs detected: 0")
+            print(f"  Pairs after filtering: {len(pairs):,}")
+            print(f"  Percentage removed: 0.00%")
+            print("="*70)
+        return pairs.copy()
+
+    candidate_idx = np.flatnonzero(candidate_mask)
+
+    pos_x1 = pairs['pos_x1'].values[candidate_idx]
+    pos_y1 = pairs['pos_y1'].values[candidate_idx]
+    yaw1 = pairs['yaw1'].values[candidate_idx]
+    size_x1 = pairs['size_x1'].values[candidate_idx]
+    size_y1 = pairs['size_y1'].values[candidate_idx]
+
+    pos_x2 = pairs['pos_x2'].values[candidate_idx]
+    pos_y2 = pairs['pos_y2'].values[candidate_idx]
+    yaw2 = pairs['yaw2'].values[candidate_idx]
+    size_x2 = pairs['size_x2'].values[candidate_idx]
+    size_y2 = pairs['size_y2'].values[candidate_idx]
     
     if NUMBA_AVAILABLE:
-        overlap_mask = check_overlap_sat(
+        candidate_overlap = check_overlap_sat(
             pos_x1, pos_y1, yaw1, size_x1, size_y1,
             pos_x2, pos_y2, yaw2, size_x2, size_y2,
             buffer
         )
     else:
         # Fallback without Numba (slower)
-        overlap_mask = np.zeros(len(pairs), dtype=bool)
-        for i in tqdm(range(len(pairs)), desc="Checking overlaps", disable=not verbose):
+        candidate_overlap = np.zeros(len(candidate_idx), dtype=bool)
+        for i in tqdm(range(len(candidate_idx)), desc="Checking overlaps", disable=not verbose):
             dx = pos_x2[i] - pos_x1[i]
             dy = pos_y2[i] - pos_y1[i]
             
@@ -187,13 +234,15 @@ def filter_overlapping_pairs(
             proj_long2 = abs(dx * cos2 + dy * sin2)
             proj_lat2 = abs(-dx * sin2 + dy * cos2)
             
-            min_long = (size_y1[i] + size_y2[i]) / 2 - buffer
-            min_lat = (size_x1[i] + size_x2[i]) / 2 - buffer
+            min_long = (size_x1[i] + size_x2[i]) / 2 - buffer
+            min_lat = (size_y1[i] + size_y2[i]) / 2 - buffer
             
             separated = (proj_long1 > min_long) or (proj_lat1 > min_lat) or \
                        (proj_long2 > min_long) or (proj_lat2 > min_lat)
             
-            overlap_mask[i] = not separated
+            candidate_overlap[i] = not separated
+
+    overlap_mask[candidate_idx] = candidate_overlap
     
     # Filter out overlapping pairs
     pairs_clean = pairs[~overlap_mask].copy()

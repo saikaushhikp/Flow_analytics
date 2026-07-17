@@ -24,7 +24,7 @@ def apply_preprocessing_filters(df, region='brussels', config=None, verbose=True
     
     Args:
         df: Raw trajectory DataFrame
-        region: Region name ('brussels' or 'oulu')
+        region: Region name ('brussels')
         config: Configuration dict (loaded from config.yaml)
         verbose: Print progress messages
         
@@ -42,8 +42,6 @@ def apply_preprocessing_filters(df, region='brussels', config=None, verbose=True
     
     if region == 'brussels':
         from regions.brussels.zones import get_footpath_zones, get_crosswalk_zones
-    elif region == 'oulu':
-        from regions.oulu.zones import get_footpath_zones, get_crosswalk_zones
     else:
         raise ValueError(f"Unknown region: {region}")
     

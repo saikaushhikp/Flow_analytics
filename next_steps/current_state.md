@@ -1,112 +1,110 @@
 # Current State
 
-## Project Purpose
+Last updated on: 2026-07-17
 
-PREM appears to mean Proactive Road Event Monitoring. The repository processes traffic object trajectories from parquet files and detects near-miss events for intersections/crosswalks. The main operational method is M-DRAC, with experimental or supporting work around SPF, IRSM, VLM validation, plotting, heatmaps, and postprocessing.
+## Executive Summary
 
-## Completed Work
+This repository is now a Brussels-first near-miss detection codebase with three active technical paths:
 
-### 1. Config-Driven M-DRAC Detection
+- `M-DRAC`: deterministic lane and crosswalk conflict detection
+- `IRSM`: interaction risk-vector modeling with unsupervised and supervised ranking
+- `Bhattacharyya`: envelope-overlap-based lane near-miss detection
 
-The best-developed subsystem is M-DRAC:
+The active workflows are usable, bounded, and backed by generated results already present in the repository. The main remaining challenge is scale, not basic functionality.
 
-- Pair generation is vectorized and batched in `ssm/utils.py`.
-- Same-lane lane detection and crosswalk pedestrian-vehicle detection are separated.
-- The M-DRAC detector has zone-specific averaging parameters.
-- Brussels crosswalks use the clean `skip_label_filter=True` design instead of label spoofing.
-- Outputs include replay links, interaction type, leader ID, distance, TTC, MDRAC, closing speed, speed difference, and yaw difference.
+## What Is Working
 
-### 2. Multi-Region Support
+### Brussels M-DRAC
 
-The repository supports two regions:
+- `regions/brussels/lane_main.py` runs lane-based M-DRAC detection
+- `regions/brussels/crosswalk_main.py` runs crosswalk pedestrian-vehicle detection
+- the Brussels preprocessing chain is shared and stable enough for bounded runs
+- outputs are written with a consistent CSV schema
+- replay links, pair plots, GIFs, and city heatmaps are available
 
-- Brussels: lane zones, footpath zones, and five crosswalk zones.
-- Oulu: lane zones, footpath zones, an exclusion zone, a crosswalk zone, and near-miss analysis zones.
+### Brussels IRSM
 
-Brussels scripts are more current than Oulu scripts.
+- `irsm/data_generation.py` generates lane risk vectors
+- `irsm/models/isolation_forest.py` runs unsupervised anomaly detection
+- `irsm/models/gaussian_anomaly.py` runs Gaussian anomaly scoring and visualizations
+- `irsm/models/supervised.py --train` trains the supervised models from Brussels labels
+- `irsm/supervised_detect.py` performs inference on the configured day
+- `irsm/compare_mdrac_irsm.py` produces day-level comparison reports
 
-### 3. Preprocessing Filter Library
+### Brussels Bhattacharyya
 
-Reusable filters exist for:
+- `bhattacharyya/detect.py` runs the day-level envelope detector
+- `bhattacharyya/envelope.py` implements the vectorized BC overlap logic
+- outputs are written under `results/bhattacharyya/brussels/lanes/`
 
-- Lifetime filtering.
-- Footpath zone filtering.
-- Crosswalk parallel-vehicle filtering.
-- Static-object removal.
-- Ghost vehicle filtering.
-- SAT-based overlap filtering.
-- Teleportation filtering.
+### Validation and Support Tooling
 
-These filters capture much of the former employee's false-positive reduction work.
+- `checks/active_pipeline_checks.py` covers the active code paths with lightweight checks
+- `checks/run_brussels_smoke_window.py` automates bounded multi-day M-DRAC runs
+- `checks/summarize_active_results.py` rebuilds the active summary markdown
+- `plotter.py`, `irsm/irsm_plotter.py`, `helpers/heatmaps.py`, and `helpers/plot_zones.py` provide the review surface
 
-### 4. Generated MDRAC Results
+## Current Reproducible Validation Surface
 
-The `results/` folder already contains outputs:
+The most reliable validation window in the repository is the bounded Brussels run summarized in [UPDATED_brussels_validation_summary.md](UPDATED_brussels_validation_summary.md).
 
-- 74 M-DRAC CSV files.
-- 2711 plot PNGs under `results/`.
-- Brussels and Oulu lane/crosswalk result sets.
-- Brussels daily statistics and risk heatmap.
+Highlights:
 
-Sample counts from current CSV files:
+- 7-day Brussels bounded smoke window
+- 116 total M-DRAC detections across lanes and crosswalks
+- reproducible risk heatmaps for M-DRAC and IRSM
+- replay-ready top conflicts with saved plots and GIFs
 
-| Dataset | Example | Rows |
-| --- | --- | ---: |
-| Brussels lanes | `results/brussels/lanes/2025-06-03/mdrac_2025-06-03.csv` | 4 detections |
-| Brussels crosswalks | `results/brussels/crosswalks/2025-06-03/mdrac_2025-06-03.csv` | 3 detections |
-| Oulu lanes | `results/oulu/lanes/2025-08-22/mdrac_2025-08-22.csv` | 25 detections, but contains timestamps beyond 2025-08-22 |
-| Oulu crosswalks | `results/oulu/crosswalks/2025-09-04/mdrac_2025-09-04.csv` | 34 detections |
+The current validation summary also records:
 
-### 5. Visualization and Analysis
+- June 1 lane IRSM vectors: `1386`
+- June 1 Isolation Forest anomalies: `3`
 
-Available tools:
+Separately, the heatmap-generation pass aggregates `22` IRSM unsupervised detections across June 1 to June 7.
 
-- `plotter.py`: creates per-pair trajectory, distance, closing-speed, velocity, and yaw-difference plots.
-- `plot_zones.py`: plots region zone layouts.
-- `irsm/irsm_plotter.py`: plots IRSM pair IDs.
-- Notebooks generate postprocessed outputs, daily stats, and heatmaps.
+## Model State
 
-### 6. IRSM Prototype
+### M-DRAC
 
-IRSM is intended to create risk vectors for all interactions and then use anomaly detection rather than fixed MDRAC thresholds. Current implemented pieces:
+M-DRAC is the most operationally explainable detector in the repository. The current implementation includes:
 
-- Risk vector extraction in `irsm/risk_vector.py`.
-- Isolation Forest detector.
-- Gaussian anomaly detector.
-- Supervised classifier code.
-- Visualization code.
+- zone-specific logic for lanes vs crosswalks
+- adaptive follower-response handling
+- replay-friendly outputs
 
-However, the data-generation entrypoint referenced by docs is missing, so IRSM is not a complete runnable pipeline in this checkout.
+### IRSM Unsupervised
 
-### 7. VLM Validation Prototype
+Isolation Forest remains the active unsupervised baseline. Gaussian anomaly detection is supported as a complementary scorer and visualization source.
 
-The VLM workflow is intended to validate M-DRAC detections by generating combined plots and sending them to Gemini or local Qwen. Core pieces exist, but the batch validator has a runtime bug and imports need cleanup.
+### IRSM Supervised
 
-### 8. Documentation History
+The supervised stack is present and trained from Brussels labels. The current saved metrics favor the Random Forest path for practical use:
 
-The weekly progress docs are detailed and valuable for context:
+- Random Forest test AUC: `0.863`
+- XGBoost test AUC: `0.708`
+- Neural Network test AUC: `0.869`, but still treated as experimental
 
-- Week 1: memory optimization of base notebook.
-- Week 2: initial M-DRAC, pair generation, SPF, plotting.
-- Week 3: modularization.
-- Week 4: overlap filters, multi-criteria ideas, duration filtering.
-- Week 5: ghost/teleportation filters, temporal averaging.
-- Week 6: VLM system.
-- Week 7: VLM simplification, Oulu analysis, IRSM implementation.
-- Week 8: crosswalk bug fix, clean `skip_label_filter`, batch scripts.
+## What Is Not Fully Solved
 
-Treat them as historical notes, not source-of-truth. Several referenced files are absent or stale.
+- full-day Brussels lane runs still hit memory limits on large windows
+- canonical prediction saving is disabled in `irsm/canonical_utils.py`
+- `irsm/supervised_detect.py` still relies on module-level configuration rather than CLI arguments
+- several historical documents still refer to old scopes, old metrics, or removed components
 
-## Current Reality
+## Active Development Direction
 
-The intended architecture is solid, but the repository is in a half-refactored state:
+The current engineering direction should be:
 
-- Python syntax parses for all 41 Python files.
-- The active base conda environment does not have project dependencies installed.
-- The intended `flow_env` environment is not present locally.
-- Several imports and references are currently broken.
-- Many paths are hardcoded to `/home/ubuntu/prem`, while this checkout is at `/home/kaushik/Kezual/Flow_analytics`.
-- The generated outputs are useful but not guaranteed to have been produced by the latest code.
+1. improve ranking quality for top daily shortlists
+2. reduce false positives without breaking reviewability
+3. keep bounded Brussels runs reproducible
+4. harden the evaluation surface before adding heavier model classes
 
-The next phase should be a stabilization phase before adding new features.
+## What To Ignore Unless Needed
 
+Treat these as archive context unless your task explicitly needs them:
+
+- older planning documents
+- week-by-week `working*.md` logs
+- historical references to Oulu, SPF production, or VLM workflows
+- any document that predates the Brussels-first stabilization and still describes this checkout as partially missing core files

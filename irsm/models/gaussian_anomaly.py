@@ -20,7 +20,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.stats import multivariate_normal, chi2
-from scipy.spatial.distance import mahalanobis
 import yaml
 import plotly.graph_objects as go
 from irsm.risk_vector import get_feature_names
@@ -111,7 +110,7 @@ class GaussianAnomalyDetector:
             probabilities = model.pdf(X)
             predictions = np.where(probabilities < self.threshold, -1, 1)
         else:  # mahalanobis
-            distances = np.array([mahalanobis(x, self.mu, self.sigma_inv) for x in X])
+            distances = self._mahalanobis_distances(X)
             predictions = np.where(distances > self.threshold, -1, 1)
         
         return predictions
@@ -128,7 +127,16 @@ class GaussianAnomalyDetector:
     
     def get_mahalanobis_distances(self, X):
         """Get Mahalanobis distances (how many std devs from mean)"""
-        return np.array([mahalanobis(x, self.mu, self.sigma_inv) for x in X])
+        return self._mahalanobis_distances(X)
+
+    def _mahalanobis_distances(self, X):
+        """Compute Mahalanobis distances with roundoff-safe clipping."""
+        centered = X - self.mu
+        squared = np.einsum('ij,jk,ik->i', centered, self.sigma_inv, centered)
+        # Numerical noise can make extremely small negative values appear here;
+        # clipping keeps the square-root well defined without changing meaning.
+        squared = np.clip(squared, 0.0, None)
+        return np.sqrt(squared)
 
 
 def visualize_gaussian_results(df, normal_df, anomaly_df, threshold, output_dir):

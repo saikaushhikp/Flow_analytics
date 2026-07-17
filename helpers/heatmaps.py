@@ -20,6 +20,10 @@ import geopandas as gpd
 from shapely import wkt
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 # Central repository path utilities
 from utils.paths import brussels_data_dir, output_root, repo_path
 
@@ -199,7 +203,7 @@ def plot_heatmap(heatmap_data, conflicts_df, gdf_zones, title, save_path):
     ax.legend(loc='upper right', fontsize=10)
     
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    fig.savefig(save_path, dpi=300, bbox_inches='tight')
+    fig.savefig(save_path, dpi=1000, bbox_inches='tight')
     plt.close(fig)
     print(f" \N{CHECK MARK}  Saved risk heatmap to {save_path}")
 

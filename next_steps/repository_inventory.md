@@ -1,155 +1,189 @@
 # Repository Inventory
 
-## Size and File Types
+Last updated on: 2026-07-17
 
-The repository contains 2859 tracked files excluding `.git` internals:
-
-| Type | Count | Notes |
-| --- | ---: | --- |
-| Python | 41 | Core implementation, scripts, models, plotting |
-| Markdown | 14 | README, progress reports, method docs |
-| YAML | 3 | Main config, environment, IRSM config |
-| Shell | 4 | Batch runners for Brussels/Oulu lanes/crosswalks |
-| Notebooks | 6 | Earlier pipelines, analysis, postprocessing |
-| CSV | 76 | Generated results and summaries |
-| PNG | 2714 | Generated plots and heatmaps |
-
-The codebase itself is modest. Most repository size is generated artifacts:
-
-- `results/`: about 345 MB, mostly plots and MDRAC CSVs.
-- `.git/`: about 903 MB.
-- `regions/`: about 3.3 MB, including maps/notebooks.
+This inventory is a practical code map for engineers who understand the traffic-safety domain but are new to this repository.
 
 ## Top-Level Structure
 
-- `config.yaml`: central runtime configuration for data dtypes, preprocessing filters, MDRAC thresholds, SPF, VLM, output paths.
-- `environment.yaml`: intended conda environment named `flow_env`.
-- `README.md`: high-level project overview. It is useful but partially stale.
-- `ssm/`: surrogate safety metric implementations.
-- `filters/`: preprocessing and postprocessing filters.
-- `regions/`: region-specific zones and run scripts for Brussels and Oulu.
-- `utils/`: memory and I/O helpers, plus IRSM preprocessing helper.
-- `irsm/`: ML/anomaly-detection experiments for interaction risk vectors.
-- `vlm/`: VLM-assisted validation workflow.
-- `docs/`: historical method docs and weekly progress reports.
-- `results/`: generated M-DRAC results, plots, and heatmap artifacts.
-- `plotter.py`, `plot_zones.py`: visualization tools.
+```text
+README.md                      Current project overview
+CONTRIBUTING.md                Contributor workflow
+config.yaml                    Master config for M-DRAC and shared preprocessing
+environment.yaml               Conda environment definition
+regions/brussels/              Brussels pipelines and zone definitions
+ssm/                           M-DRAC and shared pair-generation utilities
+filters/                       Preprocessing and postprocessing filters
+utils/                         Path resolution, data loading, memory, and I/O
+irsm/                          Risk-vector generation, models, evaluation, plotting
+bhattacharyya/                 Bhattacharyya envelope near-miss detector
+checks/                        Lightweight checks and bounded-run helpers
+helpers/                       Standalone utilities and visualization scripts
+results/mdrac/                 M-DRAC outputs and analysis artifacts
+irsm/results/                  IRSM outputs and analysis artifacts
+next_steps/                    Current handoff docs plus dated project records
+```
 
 ## Core M-DRAC Files
 
-- `ssm/utils.py`
-  - Loads YAML config.
-  - Assigns zones with GeoPandas spatial joins.
-  - Generates nearby pairs with timestamp batching.
-  - Applies overlap filtering, approaching filtering, same-lane filtering, leader/follower identification, label filtering, TTC/closing-speed filters, yaw-diff-rate, and closing acceleration.
-  - Provides `get_mdrac_pairs()` and `get_spf_pairs()`.
-
 - `ssm/m_drac.py`
-  - `ModifiedDRAC` detector.
-  - Supports `zone_type` overrides from `config.yaml`.
-  - Supports `is_pairs_data=True` for pre-generated pairs.
-  - Supports `skip_label_filter=True`, which is the clean path for crosswalk pedestrian-vehicle pairs.
-  - Applies instantaneous MDRAC threshold, dual-metric non-longitudinal filter, rolling-average peak selection, severity classification, and output formatting.
+  - modified DRAC detector
+  - handles zone-specific overrides for lanes vs crosswalks
+  - formats final conflict output rows
 
-- `config.yaml`
-  - Current MDRAC threshold: `min_mdrac: 3.4`.
-  - Main vehicle labels default to `[4, 6, 7, 8]`.
-  - Crosswalk zone override uses shorter averaging windows.
+- `ssm/utils.py`
+  - shared config loading
+  - pair generation and filtering
+  - same-lane filtering
+  - TTC and closing-speed related utilities
 
-## Region Scripts
+- `regions/brussels/lane_main.py`
+  - Brussels lane entry point
 
-Brussels:
-
-- `regions/brussels/zones.py`: lane, footpath, and crosswalk WKT polygons.
-- `regions/brussels/lane_main.py`: lane vehicle-vehicle M-DRAC pipeline.
-- `regions/brussels/crosswalk_main.py`: crosswalk pedestrian/cyclist/vehicle M-DRAC pipeline using `skip_label_filter=True`.
-
-Oulu:
-
-- `regions/oulu/zones.py`: single crosswalk zone, footpaths, near-miss zones, exclusion zone, and lane polygons.
-- `regions/oulu/lane_main.py`: lane vehicle-vehicle M-DRAC pipeline.
-- `regions/oulu/crosswalk_main.py`: crosswalk pipeline, but currently duplicated and still using old label-spoofing workaround.
-
-Batch runners:
-
-- `brussels_lanes.sh`
-- `brussels_crosswalks.sh`
-- `oulu_lanes.sh`
-- `oulu_crosswalks.sh`
+- `regions/brussels/crosswalk_main.py`
+  - Brussels crosswalk entry point
+  - uses crosswalk-specific label handling and `skip_label_filter=True`
 
 ## Filters
 
-Preprocessing:
+Preprocessing lives in `filters/preprocessing/`:
 
-- `filters/preprocessing/lifetime_filter.py`: removes IDs with too few frames.
-- `filters/preprocessing/footpath_filter.py`: removes disallowed or too-fast vehicle labels in footpath zones.
-- `filters/preprocessing/crosswalk_filter.py`: removes vehicles traveling parallel to crosswalk axes.
-- `filters/preprocessing/static_filter.py`: removes mostly stationary IDs.
-- `filters/preprocessing/zone_assignment.py`: spatially attaches zone IDs.
-- `filters/preprocessing/ghost_filter.py`: removes vehicles spawning/despawning inside an inner polygon.
-- `filters/preprocessing/overlap_filter.py`: SAT-based oriented-rectangle overlap filter for impossible pairs.
+- `lifetime_filter.py`
+- `footpath_filter.py`
+- `crosswalk_filter.py`
+- `static_filter.py`
+- `ghost_filter.py`
+- `overlap_filter.py`
+- `zone_assignment.py`
 
-Postprocessing:
+Postprocessing lives in `filters/postprocessing/`:
 
-- `filters/postprocessing/teleportation_filter.py`: flags or removes teleportation/jump artifacts.
-- `filters/postprocessing/__init__.py` mentions a duration filter, but no duration-filter file exists in the current checkout.
+- `teleportation_filter.py`
 
-## IRSM
+## Shared Utilities
 
-Current files:
+- `utils/paths.py`
+  - repository-relative path resolution
+  - environment-variable overrides
 
-- `irsm/irsm_config.yaml`: region/date, input/output paths, pair-generation thresholds, PRT values, model parameters.
-- `irsm/risk_vector.py`: extracts risk vectors from pairs, computes MDRAC, aggregates to peak averaged MDRAC.
-- `irsm/models/isolation_forest.py`: unsupervised anomaly detector.
-- `irsm/models/gaussian_anomaly.py`: Gaussian anomaly detector and plots.
-- `irsm/models/supervised.py`: supervised classifiers and training CLI.
-- `irsm/supervised_detect.py`: manual runner for saved supervised models.
-- `irsm/visualize_risk.py`: 3D/2D risk-space visualization.
-- `irsm/irsm_plotter.py`: trajectory plots for IRSM pair IDs.
+- `utils/data_loader.py`
+  - loads hourly parquet folders over a date window
+  - supports bounded runs through `start_time`, `max_hours`, and `sample_limit`
 
-Referenced but missing:
+- `utils/io_helpers.py`
+  - saves and reloads detection CSV/XLSX results
+  - enforces the M-DRAC output schema
+
+- `utils/irsm_preprocessing.py`
+  - reuses the Brussels cleaning chain for IRSM generation
+
+- `utils/memory.py`
+  - process and DataFrame memory logging
+
+## IRSM Files
 
 - `irsm/data_generation.py`
-- `irsm/create_supervised_dataset.py`
-- `irsm/data/supervised/*`
-- `irsm/models/saved/*` is intentionally gitignored.
+  - generates one lane-vector file per date
 
-## VLM
+- `irsm/risk_vector.py`
+  - feature extraction and aggregation
 
-- `vlm/prompts.py`: prompt construction.
-- `vlm/vlm_backend.py`: Gemini-first validation with local Qwen fallback.
-- `vlm/utils.py`: response parsing, MDRAC CSV extraction, combined 2x3 plot generation.
-- `vlm/batch_validator.py`: validates many pairs from a CSV.
-- `vlm/validate.py`: day-based Brussels validation script.
+- `irsm/models/isolation_forest.py`
+  - unsupervised anomaly detector
 
-The VLM code needs fixes before use. See [known_issues.md](known_issues.md).
+- `irsm/models/gaussian_anomaly.py`
+  - Gaussian anomaly detector and plots
 
-## Notebooks
+- `irsm/models/supervised.py`
+  - supervised training and metrics
 
-- `postprocessing.ipynb`: general M-DRAC/SPF postprocessing.
-- `regions/brussels/main.ipynb`: original Brussels pipeline.
-- `regions/brussels/postprocessing.ipynb`: Brussels post-detection filters.
-- `regions/brussels/analyze_nearmiss.ipynb`: Brussels statistics and heatmap.
-- `regions/oulu/main.ipynb`: original Oulu crossing and lane analysis.
-- `regions/oulu/analyze_nearmiss_oulu.ipynb`: Oulu statistics and heatmaps.
+- `irsm/supervised_detect.py`
+  - supervised inference runner
 
-The notebooks are useful as historical references, but the Python scripts should become the maintained operational path.
+- `irsm/evaluator.py`
+  - gold-label evaluation utilities
 
-## Generated Results
+- `irsm/compare_mdrac_irsm.py`
+  - day-level comparison between M-DRAC and IRSM outputs
 
-Detected result CSV coverage in `results/`:
+- `irsm/tune_mdrac.py`
+  - M-DRAC tuning utilities
 
-- Brussels lanes: 2025-06-01 through 2025-06-14.
-- Brussels crosswalks: selected days from 2025-06-01 through 2025-06-14, excluding 2025-06-05 and 2025-06-08 in the current CSV set.
-- Oulu lanes: selected dates from 2025-07-10 through 2025-09-09.
-- Oulu crosswalks: selected dates from 2025-07-10 through 2025-09-11.
-- Brussels analysis: `daily_nearmiss_stats.csv` and `risk_heatmap.png`.
+- `irsm/tune_unsupervised.py`
+  - unsupervised-model tuning utilities
 
-Result CSV schema is generally:
+- `irsm/irsm_plotter.py`
+  - IRSM pair plotting and GIF generation
+
+- `irsm/visualize_risk.py`
+  - risk-space visualizations
+
+## Bhattacharyya Files
+
+- `bhattacharyya/detect.py`
+  - day-level runner for Brussels lane envelope detection
+
+- `bhattacharyya/envelope.py`
+  - safety-envelope construction
+  - vectorized Bhattacharyya overlap computation
+  - future-horizon near-miss extraction
+
+- `bhattacharyya/bhattacharyya_config.yaml`
+  - method-specific config reference
+
+## Alternative IRSM Experiments
+
+- `irsm/alternative_methods/meta_ensemble/`
+- `irsm/alternative_methods/temporal_sequence/`
+- `irsm/alternative_methods/surrogate_fusion/`
+
+These are staged experiments, not the default path.
+
+## Validation and Operations
+
+- `checks/active_pipeline_checks.py`
+  - lightweight integrity checks for the active Brussels stack
+
+- `checks/run_brussels_smoke_window.py`
+  - multi-day bounded M-DRAC runner
+
+- `checks/summarize_active_results.py`
+  - regenerates the active Brussels markdown summary
+
+- `helpers/heatmaps.py`
+  - city-level risk heatmaps from detection CSVs
+
+- `plotter.py`
+  - per-pair M-DRAC review plots
+
+- `helpers/plot_zones.py`
+  - zone layout visualization
+
+- `helpers/animator.py`
+  - object-level trajectory GIF generator
+
+## Artifact Layout
+
+M-DRAC:
 
 ```text
-timestamp,id1,id2,zone,interaction,leader,dist,TTC,MDRAC,closing_speed,speed_diff,yaw_diff,link
+results/mdrac/brussels/lanes/{date}/
+results/mdrac/brussels/crosswalks/{date}/
+results/mdrac/brussels/analysis/
 ```
 
-Some Oulu crosswalk CSVs also include `label1,label2` because they came from the older label-spoofing workaround.
+IRSM:
 
+```text
+irsm/data/brussels/{date}/
+irsm/results/brussels/{date}/
+irsm/results/brussels/analysis/
+```
+
+Bhattacharyya:
+
+```text
+results/bhattacharyya/brussels/lanes/{date}/
+```
+
+The repository also contains archive markdown reports and generated images under `next_steps/` and `images/`.

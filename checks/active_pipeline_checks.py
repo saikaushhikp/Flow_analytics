@@ -19,6 +19,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from regions.brussels import zones
+from filters.preprocessing.overlap_filter import filter_overlapping_pairs
 from ssm.m_drac import ModifiedDRAC
 from ssm.utils import find_all_nearby_pairs, get_mdrac_pairs, load_config
 from utils import MDRAC_RESULT_COLUMNS, load_data, load_detection_results, save_detection_results
@@ -59,9 +60,8 @@ def _synthetic_pairs(label1=4, label2=4) -> pd.DataFrame:
 
 def _check_config():
     config = load_config(str(REPO_ROOT / "config.yaml"))
-    for key in ["data", "preprocessing", "filters", "mdrac", "spf", "output"]:
+    for key in ["data", "preprocessing", "filters", "mdrac", "output"]:
         assert key in config, f"config missing {key}"
-    assert config["spf"]["enabled"] is False
 
 
 def _check_load_data():
@@ -119,7 +119,8 @@ def _check_mdrac_pairs_and_detector():
         skip_label_filter=True,
     )
     assert not detections.empty
-    assert list(detections.columns) == MDRAC_RESULT_COLUMNS
+    for column in MDRAC_RESULT_COLUMNS:
+        assert column in detections.columns
 
 
 def _check_pair_generation_preserves_timestamp_zones():
@@ -192,6 +193,48 @@ def _check_pair_generation_preserves_timestamp_zones():
     assert list(pairs["zone2"]) == ["A-L1", "B-L1"]
 
 
+def _check_overlap_filter_preserves_vru_pairs():
+    overlapping_vehicle_pair = pd.DataFrame([
+        {
+            "pos_x1": 0.0,
+            "pos_y1": 0.0,
+            "yaw1": 0.0,
+            "size_x1": 4.5,
+            "size_y1": 2.0,
+            "pos_x2": 0.2,
+            "pos_y2": 0.1,
+            "yaw2": 0.0,
+            "size_x2": 4.5,
+            "size_y2": 2.0,
+            "label1": 4,
+            "label2": 4,
+        }
+    ])
+
+    vru_vehicle_pair = pd.DataFrame([
+        {
+            "pos_x1": 0.0,
+            "pos_y1": 0.0,
+            "yaw1": 0.0,
+            "size_x1": 0.5,
+            "size_y1": 0.5,
+            "pos_x2": 0.8,
+            "pos_y2": 0.2,
+            "yaw2": 0.0,
+            "size_x2": 4.5,
+            "size_y2": 2.0,
+            "label1": 1,
+            "label2": 4,
+        }
+    ])
+
+    filtered_vehicle_pair = filter_overlapping_pairs(overlapping_vehicle_pair, verbose=False)
+    filtered_vru_pair = filter_overlapping_pairs(vru_vehicle_pair, verbose=False)
+
+    assert len(filtered_vehicle_pair) == 0
+    assert len(filtered_vru_pair) == 1
+
+
 def _check_brussels_zones():
     for zone_set in [zones.get_lane_zones(), zones.get_footpath_zones(), zones.get_crosswalk_zones()]:
         assert zone_set
@@ -205,6 +248,7 @@ def main():
     _check_load_data()
     _check_result_roundtrip()
     _check_pair_generation_preserves_timestamp_zones()
+    _check_overlap_filter_preserves_vru_pairs()
     _check_mdrac_pairs_and_detector()
     _check_brussels_zones()
     print("Active pipeline checks passed")

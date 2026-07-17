@@ -10,6 +10,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from typing import List, Sequence, Union
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import pandas as pd
 
@@ -19,7 +24,7 @@ except Exception:  # pragma: no cover - fallback when pyarrow is unavailable
     pq = None
 
 
-DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
+DEFAULT_DATA_DIR = REPO_ROOT / "data"
 DEFAULT_GAP_TOLERANCE = pd.Timedelta(seconds=1)
 
 

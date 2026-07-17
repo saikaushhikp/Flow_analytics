@@ -167,7 +167,7 @@ def main() -> None:
             "",
             "## Current Decision",
             "",
-            "The active stabilization target is complete for bounded Brussels validation. Full-day/all-hour processing should be treated as a scaling task because the lane pipeline still exhausts memory on large windows.",
+            "The active stabilization target is complete for bounded Brussels validation. all-hours processing should be treated as a scaling task because the lane pipeline still exhausts memory on large windows.",
             "",
             "Manual false-positive review is not encoded in this repo. The current bounded candidates should be reviewed through their replay links before broadening the run window or retuning thresholds.",
         ]

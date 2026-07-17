@@ -1,8 +1,7 @@
 """
 IRSM lane risk-vector data generation.
 
-Active scope: Brussels lane interactions. Oulu and crosswalk variants are
-intentionally deferred in the current implementation plan.
+Active scope: Brussels lane and Crosswalk interactions.
 """
 
 from __future__ import annotations

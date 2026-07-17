@@ -1,25 +1,40 @@
-# Unsupervised Anomaly Detection Optimization Report
+# Unsupervised IRSM Tuning Report
 
-Based on parameter grid search on the gold Brussels dataset (`brussels_june_in.csv`) over the splits `val.csv` and `test.csv`.
+Last updated on: 2026-07-17
 
-## 1. Single Model Comparison (Validation Split)
+This file summarizes the current status of unsupervised IRSM tuning for the Brussels lane workflow.
 
-| model | feature_set | n_estimators | contamination | prec10 | rec10 |
-| --- | --- | --- | --- | --- | --- |
-| Isolation Forest | Full 28 Features | 150 | 0.010 | 0.100 | 1.000 |
-| Isolation Forest | Full 28 Features | 300 | 0.010 | 0.100 | 1.000 |
-| Gaussian (Ledoit-Wolf) | Full 28 Features | N/A | 0.010 | 0.100 | 1.000 |
-| Isolation Forest | Safety Core | 150 | 0.010 | 0.100 | 1.000 |
-| Isolation Forest | Safety Core | 300 | 0.010 | 0.100 | 1.000 |
-| Gaussian (Ledoit-Wolf) | Safety Core | N/A | 0.010 | 0.100 | 1.000 |
+## Scope
 
-## 2. Test Split Evaluation Results
-- **Isolation Forest (Tuned)**: Precision@10 = 0.100, Recall@10 = 1.000
-- **Gaussian (Ledoit-Wolf shrinkage)**: Precision@10 = 0.100, Recall@10 = 1.000
-- **Unsupervised Ensemble Score**: Precision@10 = 0.100, Recall@10 = 1.000
-  - *Ensemble Formula*: `0.4 * z(iforest_score) + 0.4 * z(gaussian_logpdf) + 0.2 * z(mdrac / (ttc + 0.1))`
+- Isolation Forest
+- Gaussian anomaly detection
+- lightweight ensemble ranking
 
-## 3. Key Findings
-* **Safety Core Features** outperformed the full 28-feature set by filtering out non-safety-related variance (e.g. initial speeds, coordinates, decel times).
-* **Ledoit-Wolf shrinkage covariance** successfully stabilized the covariance estimation for multivariate Gaussian anomaly detection.
-* **Unsupervised Ensemble Score** provides a robust, multi-perspective ranking that leverages both isolation-based density, distance-based normal bounds, and a kinetic-risk priority bonus.
+## Current Readable Outcome
+
+From the saved tuning artifacts currently present in the repository:
+
+- Validation Precision@10: `0.100`
+- Validation Recall@10: `1.000`
+- Test Precision@10: `0.100`
+- Test Recall@10: `1.000`
+
+## Interpretation
+
+The unsupervised path is still useful, but it is not precise enough to stand alone as the final near-miss ranking layer.
+
+It works best as:
+
+- an anomaly-screening baseline
+- a comparison surface against M-DRAC
+- an input to later fusion or supervised ranking
+
+## Practical Guidance
+
+Use the unsupervised pipeline when you want to:
+
+- inspect rare-looking interactions in feature space
+- generate candidate lists without relying on labels
+- build ensemble inputs for later ranking experiments
+
+Do not present unsupervised anomaly scores alone as the clean production shortlist.

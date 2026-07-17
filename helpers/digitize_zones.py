@@ -9,7 +9,7 @@ from the Brussels map into local metric coordinates, and prints a WKT POLYGON fo
 Usage: 
     # install OpenCV and matplotlib since the current environment `flow_env` DONOT have them
     pip install opencv-python, matplotlib
-    python digitize_zones.py
+    python helpers/digitize_zones.py
 
 """
 
@@ -17,6 +17,9 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # ==========================================
 # 1. ENTER YOUR GROUND CONTROL POINTS (GCPs)
@@ -42,7 +45,7 @@ H, _ = cv2.findHomography(pixel_pts, metric_pts)
 # ==========================================
 # 2. INTERACTIVE DIGITIZATION
 # ==========================================
-img = cv2.imread('regions/brussels/Brussels.png')
+img = cv2.imread(str(REPO_ROOT / 'regions' / 'brussels' / 'Brussels.png'))
 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 fig, ax = plt.subplots(figsize=(10, 10))

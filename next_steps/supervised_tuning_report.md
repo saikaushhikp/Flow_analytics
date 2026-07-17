@@ -1,55 +1,31 @@
-# Supervised Near-Miss Detection Tuning Report
+# Supervised IRSM Tuning Report
 
-Based on probability calibration, validation-selected thresholds, and SMOTE resampling strategy ablation.
+Last updated on: 2026-07-17
 
-## 1. SMOTE Strategy Ablation Results
+This file summarizes the current supervised IRSM tuning state from the saved repository artifacts.
 
-### Model: RANDOM_FOREST
-| Strategy | Val Precision@10 | Val AUC | Threshold |
-| --- | --- | --- | --- |
-| no_smote | 0.100 | 0.730 | 0.010 |
-| smote_gold_only | 0.100 | 0.739 | 0.020 |
-| smote_hybrid | 0.086 | 0.739 | 0.010 |
+## Current Saved Metrics
 
-### Model: XGBOOST
-| Strategy | Val Precision@10 | Val AUC | Threshold |
-| --- | --- | --- | --- |
-| no_smote | 0.100 | 0.733 | 0.010 |
-| smote_gold_only | 0.100 | 0.730 | 0.030 |
-| smote_hybrid | 0.071 | 0.702 | 0.020 |
+From `irsm/models/saved/metrics.json`:
 
-### Model: NEURAL_NETWORK
-| Strategy | Val Precision@10 | Val AUC | Threshold |
-| --- | --- | --- | --- |
-| no_smote | 0.100 | 0.708 | 0.030 |
-| smote_gold_only | 0.086 | 0.705 | 0.010 |
-| smote_hybrid | 0.071 | 0.677 | 0.020 |
+| Model | Validation AUC | Validation Threshold | Test AUC | Test Precision | Test Recall | Test F1 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Random Forest | 0.739 | 0.020 | 0.863 | 0.500 | 0.429 | 0.462 |
+| XGBoost | 0.733 | 0.010 | 0.708 | 0.200 | 0.143 | 0.167 |
+| Neural Network | 0.708 | 0.030 | 0.869 | 1.000 | 0.286 | 0.444 |
 
-## 2. Final Selected Model Configurations
+## Current Interpretation
 
-### RANDOM_FOREST
-- **SMOTE Strategy**: SMOTE_GOLD_ONLY
-- **Val AUC**: 0.739
-- **Val Precision@10**: 0.100
-- **Operating Threshold**: 0.020
-- **Test AUC**: 0.863
-- **Test Precision**: 0.500
-- **Test Recall**: 0.429
+- Random Forest is the most practical supervised path in this checkout.
+- XGBoost remains available but is currently weaker on the saved test split.
+- Neural Network has a strong AUC but remains experimental because it is less interpretable and less stable for operational use.
 
-### XGBOOST
-- **SMOTE Strategy**: NO_SMOTE
-- **Val AUC**: 0.733
-- **Val Precision@10**: 0.100
-- **Operating Threshold**: 0.010
-- **Test AUC**: 0.708
-- **Test Precision**: 0.200
-- **Test Recall**: 0.143
+## Practical Guidance
 
-### NEURAL_NETWORK
-- **SMOTE Strategy**: NO_SMOTE
-- **Val AUC**: 0.708
-- **Val Precision@10**: 0.100
-- **Operating Threshold**: 0.030
-- **Test AUC**: 0.869
-- **Test Precision**: 1.000
-- **Test Recall**: 0.286
+Prefer supervised IRSM when you need:
+
+- ranked probabilities instead of raw anomaly scores
+- comparisons against the Brussels labels
+- an interpretable ranking layer that can later be fused with M-DRAC and anomaly signals
+
+The current engineering default should be the Random Forest path.

@@ -1,6 +1,8 @@
 # Brussels Active Validation Summary
 
-Date: 2026-07-13
+Last updated on: 2026-07-17
+
+Source summary date: 2026-07-13
 
 Scope: active Brussels M-DRAC lane/crosswalk smoke validation and IRSM lane validation. Oulu, SPF production, VLM validation, and supervised IRSM remain deferred.
 
