@@ -4,6 +4,11 @@ Last updated on: 2026-07-17
 
 This guide is for engineers who understand traffic-safety analytics but are new to this repository. It covers both contribution expectations and the detailed command surface needed to run the active Brussels workflows correctly.
 
+> [!IMPORTANT]  
+> This contribution guide is current with the latest commit [`3dbecb4178769040e2fb6874d57c923637b1eff1`](https://github.com/saikaushhikp/Flow_analytics/tree/3dbecb4178769040e2fb6874d57c923637b1eff1).  
+> It provides essential guidance for executing all primary commands and workflows within this repository.
+
+
 ## 1. Scope and Expectations
 
 This checkout is Brussels-first.
